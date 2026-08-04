@@ -24,3 +24,7 @@ class ToolExecutionError(MinimalAgentError):
         self.error_code = error_code
         self.safe_message = safe_message
         super().__init__(safe_message)
+
+
+class ResourceNotFoundError(MinimalAgentError):
+    """资源不存在或当前主体无权访问。"""
