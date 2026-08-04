@@ -34,13 +34,14 @@ def _validate_timestamp(value: datetime, *, name: str) -> None:
         raise DomainValidationError(f"{name} 必须包含时区信息")
 
 
-def _validate_json_object(value: Mapping[str, Any], *, name: str) -> None:
+def _copy_json_object(value: Mapping[str, Any], *, name: str) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise DomainValidationError(f"{name} 必须是 JSON 对象")
     try:
-        json.dumps(dict(value), ensure_ascii=False)
+        serialized_value = json.dumps(dict(value), ensure_ascii=False)
     except (TypeError, ValueError) as exc:
         raise DomainValidationError(f"{name} 必须可序列化为 JSON") from exc
+    return json.loads(serialized_value)
 
 
 def _timestamp() -> datetime:
@@ -210,8 +211,11 @@ class ToolCall:
     def __post_init__(self) -> None:
         _require_text(self.tool_call_id, name="tool_call_id")
         _require_text(self.name, name="name")
-        _validate_json_object(self.arguments, name="arguments")
-        object.__setattr__(self, "arguments", dict(self.arguments))
+        object.__setattr__(
+            self,
+            "arguments",
+            _copy_json_object(self.arguments, name="arguments"),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -237,8 +241,11 @@ class ToolResult:
         _require_text(self.tool_name, name="tool_name")
         if not isinstance(self.status, ToolResultStatus):
             raise DomainValidationError("status 必须是 ToolResultStatus 枚举值")
-        _validate_json_object(self.result, name="result")
-        object.__setattr__(self, "result", dict(self.result))
+        object.__setattr__(
+            self,
+            "result",
+            _copy_json_object(self.result, name="result"),
+        )
 
         if self.status is ToolResultStatus.SUCCESS:
             if self.error_code is not None or self.error_message is not None:
