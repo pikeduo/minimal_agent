@@ -1,0 +1,35 @@
+
+# 本地 Agent 协作说明与设计文档
+AGENTS.md
+docs/
+
+# 本地环境与 Python 构建产物
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+htmlcov/
+.coverage
+coverage.xml
+build/
+dist/
+*.egg-info/
+
+# IDE 与操作系统本地文件
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 本地运行产物
+data/
+logs/
+*.sqlite3
+*.db
+*.jsonl
