@@ -108,6 +108,8 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .message-assistant { margin-right: 9%; border: 1px solid #e3e7f1; background: #fff; }
 .composer-panel { margin-top: 1.3rem; }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: #7b849b; font-size: .82rem; }
+.browser-key-status { display: block; margin-top: .25rem; color: #7b849b; }
+.browser-key-status.is-ready { color: #137765; font-weight: 700; }
 
 .todo-list li { padding: .76rem .8rem; border-bottom: 1px solid #eef0f7; }
 .todo-list li:last-child { border-bottom: 0; }

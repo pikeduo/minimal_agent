@@ -23,7 +23,10 @@
     <label for="message-content">消息</label>
     <textarea id="message-content" name="content" rows="4" maxlength="4000" required></textarea>
     <div class="composer-footer">
-      <span>Enter 换行，点击发送开始运行</span>
+      <span>
+        <span>Enter 换行，点击发送开始运行</span>
+        <small id="browser-key-chat-status" class="browser-key-status" aria-live="polite">正在检测浏览器密钥状态。</small>
+      </span>
       <button type="submit">发送消息</button>
     </div>
   </form>

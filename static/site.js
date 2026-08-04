@@ -24,20 +24,32 @@
     }
   }
 
+  function setChatKeyStatus(hasKey) {
+    const status = document.querySelector("#browser-key-chat-status");
+    if (!status) {
+      return;
+    }
+    status.textContent = hasKey
+      ? "已检测到浏览器密钥，本次消息将使用它。"
+      : "未检测到浏览器密钥，将使用服务端 .env 配置。";
+    status.classList.toggle("is-ready", hasKey);
+  }
+
   function updateKeyState(message) {
     const hasKey = Boolean(readKey());
     setStatus(message || (hasKey ? "聊天请求将使用浏览器缓存的密钥。" : "可在此保存密钥，或继续使用服务端 .env 配置。"), hasKey);
+    setChatKeyStatus(hasKey);
   }
 
   function initializeKeyControls() {
     const input = document.querySelector("#browser-api-key-input");
     const save = document.querySelector("#browser-key-save");
     const clear = document.querySelector("#browser-key-clear");
+    updateKeyState();
     if (!input || !save || !clear) {
       return;
     }
 
-    updateKeyState();
     save.addEventListener("click", () => {
       const key = input.value.trim();
       if (!key) {
@@ -72,23 +84,22 @@
     return form instanceof HTMLFormElement && /\/sessions\/[^/]+\/messages$/.test(form.action);
   }
 
-  async function submitChatWithoutHtmx(event) {
+  async function submitChatWithBrowserKey(event) {
     const form = event.target;
-    if (!isChatForm(form) || window.htmx) {
+    const key = readKey();
+    if (!isChatForm(form) || !key) {
       return;
     }
     event.preventDefault();
+    event.stopImmediatePropagation();
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) {
       submitButton.disabled = true;
     }
 
     try {
-      const key = readKey();
       const headers = {"HX-Request": "true"};
-      if (key) {
-        headers["X-DeepSeek-API-Key"] = key;
-      }
+      headers["X-DeepSeek-API-Key"] = key;
       const response = await window.fetch(form.action, {
         method: "POST",
         body: new FormData(form),
@@ -126,7 +137,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", initializeKeyControls);
-  document.addEventListener("submit", submitChatWithoutHtmx);
+  document.addEventListener("submit", submitChatWithBrowserKey, true);
 
   document.body.addEventListener("htmx:configRequest", (event) => {
     const path = event.detail.path || event.detail.elt?.getAttribute("hx-post") || "";

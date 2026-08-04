@@ -62,6 +62,7 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert 'hx-post="/sessions/' in chat.text
     assert 'id="chat-panel"' in chat.text
     assert 'id="todos-panel"' in chat.text
+    assert 'id="browser-key-chat-status"' in chat.text
     assert settings.status_code == 200
     assert "deepseek-v4-flash" in settings.text
     assert "test-secret-that-must-not-be-rendered" not in settings.text
@@ -81,7 +82,7 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert script.status_code == 200
     assert "minimal-agent.deepseek-api-key" in script.text
     assert "X-DeepSeek-API-Key" in script.text
-    assert "submitChatWithoutHtmx" in script.text
+    assert "submitChatWithBrowserKey" in script.text
     assert '"HX-Request": "true"' in script.text
 
 
