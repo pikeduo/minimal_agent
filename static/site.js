@@ -68,12 +68,71 @@
     });
   }
 
+  function isChatForm(form) {
+    return form instanceof HTMLFormElement && /\/sessions\/[^/]+\/messages$/.test(form.action);
+  }
+
+  async function submitChatWithoutHtmx(event) {
+    const form = event.target;
+    if (!isChatForm(form) || window.htmx) {
+      return;
+    }
+    event.preventDefault();
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
+    try {
+      const key = readKey();
+      const headers = {"HX-Request": "true"};
+      if (key) {
+        headers["X-DeepSeek-API-Key"] = key;
+      }
+      const response = await window.fetch(form.action, {
+        method: "POST",
+        body: new FormData(form),
+        headers,
+        credentials: "same-origin",
+      });
+      const content = await response.text();
+      const fragment = document.createRange().createContextualFragment(content);
+      const nextChat = fragment.querySelector("#chat-panel");
+      const nextTodos = fragment.querySelector("#todos-panel");
+      const currentChat = document.querySelector("#chat-panel");
+      const currentTodos = document.querySelector("#todos-panel");
+      if (nextChat && currentChat) {
+        currentChat.replaceWith(nextChat);
+      }
+      if (nextTodos && currentTodos) {
+        currentTodos.replaceWith(nextTodos);
+      }
+      if (!nextChat) {
+        form.insertAdjacentHTML("afterend", content);
+      }
+      if (response.ok) {
+        form.reset();
+      }
+    } catch (_) {
+      form.insertAdjacentHTML(
+        "afterend",
+        '<p class="error-message" role="alert">请求发送失败，请检查网络连接后重试。</p>',
+      );
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", initializeKeyControls);
+  document.addEventListener("submit", submitChatWithoutHtmx);
 
   document.body.addEventListener("htmx:configRequest", (event) => {
-    const path = event.detail.path || "";
+    const path = event.detail.path || event.detail.elt?.getAttribute("hx-post") || "";
     const key = readKey();
     if (key && /\/sessions\/[^/]+\/messages$/.test(path)) {
+      event.detail.headers ||= {};
       event.detail.headers["X-DeepSeek-API-Key"] = key;
     }
   });

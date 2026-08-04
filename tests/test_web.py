@@ -77,9 +77,12 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert 'type="password"' in settings.text
     assert 'id="browser-api-key-input"' in settings.text
     assert "不会由网页写入 <code>.env</code>" in settings.text
+    assert 'src="/static/site.js"' in settings.text
     assert script.status_code == 200
     assert "minimal-agent.deepseek-api-key" in script.text
     assert "X-DeepSeek-API-Key" in script.text
+    assert "submitChatWithoutHtmx" in script.text
+    assert '"HX-Request": "true"' in script.text
 
 
 def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_path) -> None:
