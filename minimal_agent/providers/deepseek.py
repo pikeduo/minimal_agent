@@ -20,6 +20,7 @@ from openai import (
 
 from ..errors import DomainValidationError
 from ..models import (
+    DECISION_SUMMARY_MAX_LENGTH,
     FinalAnswer,
     MessageRole,
     ProviderError,
@@ -271,20 +272,44 @@ class DeepSeekProvider:
             if not choices:
                 raise ValueError("响应没有候选项")
             message = choices[0].message
+            decision_summary = cls._parse_decision_summary(message)
             raw_calls = message.tool_calls or ()
             if raw_calls:
                 calls = tuple(cls._parse_tool_call(raw_call) for raw_call in raw_calls)
-                return ToolCallBatch(calls=calls)
+                return ToolCallBatch(
+                    calls=calls,
+                    decision_summary=decision_summary,
+                )
             content = message.content
             if not isinstance(content, str) or not content.strip():
                 raise ValueError("响应没有最终文本")
-            return FinalAnswer(content=content)
+            return FinalAnswer(
+                content=content,
+                decision_summary=decision_summary,
+            )
         except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
             return cls._error(
                 ProviderErrorKind.INVALID_RESPONSE,
                 "模型服务返回了无法解析的响应。",
                 retryable=False,
             )
+
+    @staticmethod
+    def _parse_decision_summary(message: Any) -> str | None:
+        """提取供应商提供的短决策摘要，绝不读取完整隐式思维链。"""
+
+        for field_name in ("decision_summary", "reasoning_summary"):
+            value = getattr(message, field_name, None)
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise ValueError("决策摘要必须是字符串")
+            summary = " ".join(value.split())
+            if len(summary) > DECISION_SUMMARY_MAX_LENGTH:
+                raise ValueError("决策摘要长度超过限制")
+            if summary:
+                return summary
+        return None
 
     @staticmethod
     def _parse_tool_call(raw_call: Any) -> ToolCall:

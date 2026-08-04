@@ -72,13 +72,16 @@ def make_request(**overrides: object) -> LLMRequest:
 
 
 def response_with_message(
-    *, content: str | None = None, tool_calls: object = None
+    *, content: str | None = None, tool_calls: object = None, **attributes: object
 ) -> object:
+    message_attributes = {
+        "content": content,
+        "tool_calls": tool_calls,
+        **attributes,
+    }
     return SimpleNamespace(
         choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(content=content, tool_calls=tool_calls)
-            )
+            SimpleNamespace(message=SimpleNamespace(**message_attributes))
         ]
     )
 
@@ -152,6 +155,73 @@ def test_deepseek_provider_maps_multiple_tool_calls_to_internal_batch() -> None:
             ToolCall("call-1", "calculator", {"expression": "1 + 1"}),
             ToolCall("call-2", "weather", {"city": "厦门"}),
         )
+    )
+
+
+def test_deepseek_provider_maps_short_decision_summary_for_answer_and_tool_call() -> None:
+    answer_client, _ = make_client(
+        response_with_message(
+            content="结果是 2。",
+            reasoning_summary="  已完成计算并整理结果。  ",
+        )
+    )
+    answer_provider = DeepSeekProvider(api_key="test-key", client=answer_client)
+
+    answer = answer_provider.complete(make_request())
+
+    assert answer == FinalAnswer("结果是 2。", "已完成计算并整理结果。")
+
+    raw_call = SimpleNamespace(
+        id="call-1",
+        function=SimpleNamespace(
+            name="calculator", arguments='{"expression": "1 + 1"}'
+        ),
+    )
+    tool_client, _ = make_client(
+        response_with_message(
+            tool_calls=[raw_call],
+            decision_summary="需要调用计算工具。",
+        )
+    )
+    tool_provider = DeepSeekProvider(api_key="test-key", client=tool_client)
+
+    tool_batch = tool_provider.complete(make_request())
+
+    assert tool_batch == ToolCallBatch(
+        (ToolCall("call-1", "calculator", {"expression": "1 + 1"}),),
+        "需要调用计算工具。",
+    )
+
+
+def test_deepseek_provider_ignores_full_reasoning_content() -> None:
+    client, _ = make_client(
+        response_with_message(
+            content="结果是 2。",
+            reasoning_content="这是一段不应被读取、保存或展示的完整思维链。",
+        )
+    )
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    result = provider.complete(make_request())
+
+    assert result == FinalAnswer("结果是 2。")
+
+
+def test_deepseek_provider_rejects_overlong_decision_summary_safely() -> None:
+    client, _ = make_client(
+        response_with_message(
+            content="结果是 2。",
+            decision_summary="a" * 501,
+        )
+    )
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    result = provider.complete(make_request())
+
+    assert result == ProviderError(
+        kind=ProviderErrorKind.INVALID_RESPONSE,
+        safe_message="模型服务返回了无法解析的响应。",
+        retryable=False,
     )
 
 
