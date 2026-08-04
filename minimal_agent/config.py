@@ -31,9 +31,9 @@ def _positive_int(value: str | None, *, name: str, default: int) -> int:
     try:
         parsed = int(value)
     except ValueError as exc:
-        raise ValueError(f"{name} must be a positive integer") from exc
+        raise ValueError(f"{name} 必须是正整数") from exc
     if parsed <= 0:
-        raise ValueError(f"{name} must be a positive integer")
+        raise ValueError(f"{name} 必须是正整数")
     return parsed
 
 
@@ -55,7 +55,7 @@ def load_settings(environment: Mapping[str, str] | None = None) -> Settings:
         default=12,
     )
     if context_keep_recent > max_context_messages:
-        raise ValueError("CONTEXT_KEEP_RECENT must not exceed MAX_CONTEXT_MESSAGES")
+        raise ValueError("CONTEXT_KEEP_RECENT 不能超过 MAX_CONTEXT_MESSAGES")
 
     api_key = environment.get("OPENAI_API_KEY") or None
     return Settings(
