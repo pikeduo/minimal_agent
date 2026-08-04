@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable
 
@@ -51,6 +52,7 @@ def create_app(
     """创建包含本地 Runtime、Session、Todo 和 Web 路由的应用。"""
 
     app_settings = settings or load_settings()
+    _configure_server_logging(app_settings.server_log_path)
     services = _build_services(
         app_settings,
         provider=provider,
@@ -66,6 +68,32 @@ def create_app(
     )
     app.include_router(create_router(PROJECT_ROOT / "templates", services))
     return app
+
+
+def _configure_server_logging(log_path: str) -> None:
+    """将 Uvicorn 的访问和错误输出追加写入本地日志文件。"""
+
+    resolved_path = Path(log_path).resolve()
+    try:
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        for logger_name in ("uvicorn.access", "uvicorn.error", None):
+            logger = logging.getLogger(logger_name)
+            if any(
+                getattr(handler, "_minimal_agent_log_path", None) == str(resolved_path)
+                for handler in logger.handlers
+            ):
+                continue
+            handler = logging.FileHandler(resolved_path, encoding="utf-8")
+            handler._minimal_agent_log_path = str(resolved_path)  # type: ignore[attr-defined]
+            handler.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s %(levelname)s %(name)s %(message)s",
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                )
+            )
+            logger.addHandler(handler)
+    except OSError:
+        return
 
 
 def _build_services(

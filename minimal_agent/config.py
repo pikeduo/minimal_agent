@@ -21,6 +21,7 @@ class Settings:
     deepseek_base_url: str
     database_path: str
     trace_path: str
+    server_log_path: str
     max_agent_steps: int
     max_context_messages: int
     context_keep_recent: int
@@ -67,6 +68,7 @@ def load_settings(environment: Mapping[str, str] | None = None) -> Settings:
         ),
         database_path=environment.get("DATABASE_PATH", "data/minimal_agent.sqlite3"),
         trace_path=environment.get("TRACE_PATH", "logs/agent-trace.jsonl"),
+        server_log_path=environment.get("SERVER_LOG_PATH", "logs/server.log"),
         max_agent_steps=_positive_int(
             environment.get("MAX_AGENT_STEPS"),
             name="MAX_AGENT_STEPS",

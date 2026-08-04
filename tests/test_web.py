@@ -19,6 +19,7 @@ def make_settings(tmp_path) -> Settings:
         deepseek_base_url="https://api.deepseek.com",
         database_path=str(tmp_path / "web.sqlite3"),
         trace_path=str(tmp_path / "agent-trace.jsonl"),
+        server_log_path=str(tmp_path / "server.log"),
         max_agent_steps=4,
         max_context_messages=12,
         context_keep_recent=6,

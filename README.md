@@ -80,5 +80,6 @@ Remove-Item Env:RUN_LLM_SMOKE
 
 - 会话、消息、Todo 和工具结果存储在 SQLite；历史过长时会生成确定性摘要，原始消息不会被删除。
 - Trace 按 `run_id` 关联运行、模型和工具事件，不记录 API Key、Authorization、原始模型响应、Traceback 或完整推理内容。
+- `logs/server.log` 追加保存 Uvicorn 的访问与错误输出；浏览器缓存命中时的 HTTP `304 Not Modified` 属于正常响应，不代表页面或模型调用失败。
 - `search` 与 `weather` 不访问互联网；它们是稳定的本地 Mock 工具。
 - 当前不包含生产认证、流式输出或同一 Session 的并发串行化。
