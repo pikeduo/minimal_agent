@@ -45,6 +45,7 @@ class WebServices:
     auth_session_repository: AuthSessionRepository
     session_repository: SessionRepository
     message_repository: MessageRepository
+    tool_result_repository: ToolResultRepository
     todo_repository: TodoRepository
     settings: Settings
     browser_key_provider_factory: Callable[[str], LLMProvider]
@@ -219,6 +220,12 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "session": session,
                 "session_id": session_id,
                 "messages": messages,
+                "tool_results_by_run": _tool_results_by_run(
+                    services,
+                    user_id=user_id,
+                    session_id=session_id,
+                    messages=messages,
+                ),
                 "todos": todos,
                 "run_status": None,
                 "error_message": (
@@ -294,6 +301,12 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
             name="fragments/chat_update.html",
             context={
                 "messages": messages,
+                "tool_results_by_run": _tool_results_by_run(
+                    services,
+                    user_id=user_id,
+                    session_id=session_id,
+                    messages=messages,
+                ),
                 "todos": todos,
                 "session_id": session_id,
                 "todo_oob": True,
@@ -350,6 +363,12 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
             name="fragments/chat_update.html",
             context={
                 "messages": messages,
+                "tool_results_by_run": _tool_results_by_run(
+                    services,
+                    user_id=user_id,
+                    session_id=session_id,
+                    messages=messages,
+                ),
                 "todos": todos,
                 "session_id": session_id,
                 "todo_oob": True,
@@ -613,6 +632,26 @@ def _todo_response(
         name="fragments/todos.html",
         context={"todos": todos, "session_id": session_id},
     )
+
+
+def _tool_results_by_run(
+    services: WebServices,
+    *,
+    user_id: str,
+    session_id: str,
+    messages: tuple[Any, ...],
+) -> dict[str, tuple[Any, ...]]:
+    """按助手消息所属 Run 读取工具状态，避免被后续回复覆盖。"""
+
+    return {
+        message.run_id: services.tool_result_repository.list_for_run(
+            user_id=user_id,
+            session_id=session_id,
+            run_id=message.run_id,
+        )
+        for message in messages
+        if message.run_id is not None
+    }
 
 
 def _run_status(runtime_result: Any) -> str:

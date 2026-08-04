@@ -142,6 +142,7 @@ def _build_services(
         max_messages=settings.max_context_messages,
         max_tool_results=settings.max_context_messages,
         compressor=compressor,
+        todo_repository=todos,
     )
     conversation_service = ConversationService(
         context_builder=context_builder,
@@ -155,6 +156,7 @@ def _build_services(
         auth_session_repository=auth_sessions,
         session_repository=sessions,
         message_repository=messages,
+        tool_result_repository=tool_results,
         todo_repository=todos,
         settings=settings,
         browser_key_provider_factory=(

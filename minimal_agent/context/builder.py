@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Mapping
 
 from ..errors import DomainValidationError
 from ..models import Message, ToolResult
-from ..storage import MessageRepository, SessionRepository, ToolResultRepository
+from ..storage import (
+    MessageRepository,
+    SessionRepository,
+    TodoRepository,
+    ToolResultRepository,
+)
 from .compression import ContextCompressor
 
 
@@ -18,6 +24,7 @@ class SessionContext:
     tool_results: tuple[ToolResult, ...]
     summary: str | None = None
     compressed: bool = False
+    current_todos: tuple[Mapping[str, Any], ...] = ()
 
 
 class ContextBuilder:
@@ -32,6 +39,7 @@ class ContextBuilder:
         max_messages: int,
         max_tool_results: int,
         compressor: ContextCompressor | None = None,
+        todo_repository: TodoRepository | None = None,
     ) -> None:
         if not isinstance(session_repository, SessionRepository):
             raise DomainValidationError("session_repository 必须是 SessionRepository")
@@ -41,6 +49,8 @@ class ContextBuilder:
             raise DomainValidationError(
                 "tool_result_repository 必须是 ToolResultRepository"
             )
+        if todo_repository is not None and not isinstance(todo_repository, TodoRepository):
+            raise DomainValidationError("todo_repository 必须是 TodoRepository 或 None")
         for name, value in (
             ("max_messages", max_messages),
             ("max_tool_results", max_tool_results),
@@ -54,6 +64,7 @@ class ContextBuilder:
         self._max_messages = max_messages
         self._max_tool_results = max_tool_results
         self._compressor = compressor
+        self._todo_repository = todo_repository
 
     def build(self, *, user_id: str, session_id: str) -> SessionContext:
         """验证 Session 所有权后，按时间顺序返回近期上下文。"""
@@ -79,6 +90,26 @@ class ContextBuilder:
             and compression_result.summary is not None
             else self._max_messages
         )
+        current_todos = (
+            tuple(
+                {
+                    "todo_id": todo.todo_id,
+                    "title": todo.title,
+                    "status": todo.status.value,
+                    "completed_at": (
+                        todo.completed_at.isoformat()
+                        if todo.completed_at is not None
+                        else None
+                    ),
+                }
+                for todo in self._todo_repository.list_for_session(
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+            )
+            if self._todo_repository is not None
+            else ()
+        )
         return SessionContext(
             messages=messages[-message_limit:],
             tool_results=tool_results,
@@ -88,4 +119,5 @@ class ContextBuilder:
             compressed=compression_result.compressed
             if compression_result is not None
             else False,
+            current_todos=current_todos,
         )

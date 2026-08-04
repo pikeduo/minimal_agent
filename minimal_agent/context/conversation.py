@@ -120,6 +120,7 @@ class ConversationService:
             historical_tool_results=context.tool_results,
             session_summary=context.summary,
             context_compressed=context.compressed,
+            current_todos=context.current_todos,
             provider_override=provider_override,
         )
         self._tool_result_repository.append_for_run(

@@ -296,6 +296,73 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert "2 + 3&quot;" not in response.text
 
 
+def test_tool_status_is_retained_with_its_assistant_message_after_later_reply(tmp_path) -> None:
+    client = make_client(
+        tmp_path,
+        (
+            ToolCallBatch(
+                (ToolCall("call-1", "calculator", {"expression": "2 + 3"}),)
+            ),
+            FinalAnswer("第一次计算结果为 5。"),
+            FinalAnswer("第二次回复未调用工具。"),
+        ),
+    )
+    session_id = create_session(client)
+
+    client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "请计算 2 + 3。"},
+        headers={"HX-Request": "true"},
+    )
+    client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "请直接说明结果。"},
+        headers={"HX-Request": "true"},
+    )
+    page = client.get(f"/sessions/{session_id}")
+
+    assert page.status_code == 200
+    assert "第一次计算结果为 5。" in page.text
+    assert "第二次回复未调用工具。" in page.text
+    assert 'class="message-tool-status"' in page.text
+    assert page.text.count("已完成工具调用：") == 1
+    assert page.text.count("<code>calculator</code>") == 1
+
+
+def test_completed_todo_is_included_in_next_agent_context(tmp_path) -> None:
+    provider = ScriptedLLMProvider((FinalAnswer("已知晓待办已完成。"),))
+    client = TestClient(create_app(make_settings(tmp_path), provider=provider))
+    register_user(client, "user-a")
+    session_id = create_session(client)
+
+    client.post(
+        f"/sessions/{session_id}/todos",
+        data={"title": "整理测试结果"},
+        headers={"HX-Request": "true"},
+    )
+    todo_id = client.app.state.services.todo_repository.list_for_session(
+        user_id=current_user_id(client),
+        session_id=session_id,
+    )[0].todo_id
+    client.post(
+        f"/sessions/{session_id}/todos/{todo_id}/complete",
+        headers={"HX-Request": "true"},
+    )
+    response = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "当前待办完成了吗？"},
+        headers={"HX-Request": "true"},
+    )
+
+    current_todos = provider.received_requests[0].current_todos
+    assert response.status_code == 200
+    assert "已知晓待办已完成。" in response.text
+    assert current_todos[0]["todo_id"] == todo_id
+    assert current_todos[0]["title"] == "整理测试结果"
+    assert current_todos[0]["status"] == "completed"
+    assert current_todos[0]["completed_at"] is not None
+
+
 def test_htmx_message_submission_reports_max_agent_steps_safely(tmp_path) -> None:
     client = make_client(
         tmp_path,

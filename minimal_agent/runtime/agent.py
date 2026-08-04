@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 from ..errors import DomainValidationError
@@ -84,6 +84,7 @@ class AgentRuntime:
         historical_tool_results: tuple[ToolResult, ...] = (),
         session_summary: str | None = None,
         context_compressed: bool = False,
+        current_todos: tuple[Mapping[str, Any], ...] = (),
         provider_override: LLMProvider | None = None,
     ) -> RuntimeResult:
         """运行 Provider—工具循环，直到最终回答、上限或安全失败。"""
@@ -97,6 +98,8 @@ class AgentRuntime:
             raise DomainValidationError("session_summary 必须是非空字符串或 None")
         if not isinstance(context_compressed, bool):
             raise DomainValidationError("context_compressed 必须是布尔值")
+        if not all(isinstance(todo, Mapping) for todo in current_todos):
+            raise DomainValidationError("current_todos 只能包含 JSON 对象")
         if provider_override is not None and not callable(
             getattr(provider_override, "complete", None)
         ):
@@ -126,6 +129,7 @@ class AgentRuntime:
                 "message_count": len(messages),
                 "historical_tool_result_count": len(historical_tool_results),
                 "has_summary": session_summary is not None,
+                "todo_count": len(current_todos),
             },
         )
         if context_compressed:
@@ -147,6 +151,7 @@ class AgentRuntime:
                 tool_results=tuple((*historical_tool_results, *tool_results)),
                 tool_call_batches=tuple(tool_call_batches),
                 session_summary=session_summary,
+                current_todos=current_todos,
             )
             self._trace(
                 event="llm.requested",

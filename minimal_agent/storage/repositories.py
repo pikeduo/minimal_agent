@@ -784,6 +784,46 @@ class ToolResultRepository(_OwnershipRepository):
             for row in reversed(rows)
         )
 
+    def list_for_run(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        run_id: str,
+    ) -> tuple[ToolResult, ...]:
+        """读取一条助手回复所属 Run 的工具结果，用于固定展示历史调用状态。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        _require_text(run_id, name="run_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            rows = connection.execute(
+                """
+                SELECT tool_call_id, tool_name, status, result_json, error_code, error_message
+                FROM tool_results
+                WHERE user_id = ? AND session_id = ? AND run_id = ?
+                ORDER BY id ASC
+                """,
+                (user_id, session_id, run_id),
+            ).fetchall()
+
+        return tuple(
+            ToolResult(
+                tool_call_id=row["tool_call_id"],
+                tool_name=row["tool_name"],
+                status=ToolResultStatus(row["status"]),
+                result=json.loads(row["result_json"]),
+                error_code=row["error_code"],
+                error_message=row["error_message"],
+            )
+            for row in rows
+        )
+
 
 class SessionSummaryRepository(_OwnershipRepository):
     """读取和更新 Session 压缩摘要及其覆盖游标。"""

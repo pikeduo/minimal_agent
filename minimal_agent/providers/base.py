@@ -42,6 +42,7 @@ class LLMRequest:
     tool_results: tuple[ToolResult, ...] = ()
     tool_call_batches: tuple[ToolCallBatch, ...] = ()
     session_summary: str | None = None
+    current_todos: tuple[Mapping[str, Any], ...] = ()
 
     def __post_init__(self) -> None:
         _require_text(self.model, name="model")
@@ -64,6 +65,11 @@ class LLMRequest:
             not isinstance(self.session_summary, str) or not self.session_summary.strip()
         ):
             raise DomainValidationError("session_summary 必须是非空字符串或 None")
+        copied_todos = tuple(
+            _copy_json_object(todo, name="current_todos")
+            for todo in self.current_todos
+        )
+        object.__setattr__(self, "current_todos", copied_todos)
 
     def to_dict(self) -> dict[str, Any]:
         """生成可供 Provider Adapter 使用的内部数据副本。"""
@@ -75,6 +81,7 @@ class LLMRequest:
             "tool_results": [result.to_dict() for result in self.tool_results],
             "tool_call_batches": [batch.to_dict() for batch in self.tool_call_batches],
             "session_summary": self.session_summary,
+            "current_todos": [dict(todo) for todo in self.current_todos],
         }
 
 

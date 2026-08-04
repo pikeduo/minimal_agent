@@ -132,6 +132,34 @@ def test_deepseek_provider_includes_greeting_and_capability_instruction() -> Non
     assert "计算、搜索、天气查询和待办管理" in SYSTEM_INSTRUCTION
 
 
+def test_deepseek_provider_includes_current_todo_snapshot_in_context() -> None:
+    client, completions = make_client(response_with_message(content="已读取待办状态。"))
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    result = provider.complete(
+        make_request(
+            current_todos=(
+                {
+                    "todo_id": "todo-1",
+                    "title": "整理周报",
+                    "status": "completed",
+                    "completed_at": "2026-08-04T10:00:00+00:00",
+                },
+            )
+        )
+    )
+
+    assert result == FinalAnswer("已读取待办状态。")
+    assert completions.calls[0]["messages"][1] == {
+        "role": "system",
+        "content": (
+            "当前会话待办状态："
+            '[{"todo_id": "todo-1", "title": "整理周报", "status": "completed", '
+            '"completed_at": "2026-08-04T10:00:00+00:00"}]'
+        ),
+    }
+
+
 def test_deepseek_provider_maps_multiple_tool_calls_to_internal_batch() -> None:
     raw_calls = [
         SimpleNamespace(

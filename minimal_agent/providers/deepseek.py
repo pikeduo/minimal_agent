@@ -194,6 +194,14 @@ class DeepSeekProvider:
                     "content": f"会话摘要：{request.session_summary}",
                 }
             )
+        if request.current_todos:
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "当前会话待办状态："
+                    + json.dumps(request.current_todos, ensure_ascii=False),
+                }
+            )
 
         for message in request.messages:
             if message.role in {
