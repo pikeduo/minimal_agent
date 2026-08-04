@@ -144,6 +144,56 @@
     );
   }
 
+  function initializeMarkdownCopyButtons() {
+    document.addEventListener("click", async (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      const button = event.target.closest("[data-markdown]");
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      let markdown;
+      try {
+        markdown = JSON.parse(button.dataset.markdown || "");
+      } catch (_) {
+        return;
+      }
+      if (typeof markdown !== "string") {
+        return;
+      }
+      const originalText = button.textContent;
+      try {
+        await copyText(markdown);
+        button.textContent = "已复制 Markdown";
+      } catch (_) {
+        button.textContent = "复制失败，请手动复制";
+      }
+      window.setTimeout(() => {
+        button.textContent = originalText;
+      }, 1800);
+    });
+  }
+
+  async function copyText(value) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) {
+      throw new Error("浏览器拒绝写入剪贴板");
+    }
+  }
+
   function isChatRequestForm(form) {
     return form instanceof HTMLFormElement
       && /\/sessions\/[^/]+\/messages(?:\/[^/]+\/retry)?$/.test(form.action);
@@ -204,6 +254,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     initializeKeyControls();
     initializeEmptySessionCleanup();
+    initializeMarkdownCopyButtons();
   });
   document.addEventListener("submit", submitChatWithBrowserKey, true);
 

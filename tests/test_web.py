@@ -126,6 +126,8 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert "navigator.sendBeacon" in script.text
     assert "window.fetch(leaveUrl" in script.text
     assert "window.location.assign(destination.href)" in script.text
+    assert "initializeMarkdownCopyButtons" in script.text
+    assert "navigator.clipboard.writeText" in script.text
 
 
 def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> None:
@@ -286,7 +288,9 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert "请计算 2 + 3。" in response.text
     assert "计算结果为 <strong>5</strong>。" in response.text
     assert "<li>已完成计算</li>" in response.text
-    assert "**5**" not in response.text
+    assert "data-markdown=" in response.text
+    assert "复制 Markdown" in response.text
+    assert "**5**" in response.text
     assert "已完成工具调用：calculator" in response.text
     assert 'hx-swap-oob="true"' in response.text
     assert "2 + 3&quot;" not in response.text

@@ -4,6 +4,12 @@
       <h2>{% if message.role.value == 'user' %}你{% elif message.role.value == 'assistant' %}助手{% else %}{{ message.role.value }}{% endif %}</h2>
       {% if message.role.value == 'assistant' %}
         <div class="message-content markdown-content">{{ message.content | markdown }}</div>
+        <button
+          class="copy-markdown-button"
+          type="button"
+          data-markdown="{{ message.content | tojson | forceescape }}"
+          aria-label="复制原始 Markdown 回复"
+        >复制 Markdown</button>
       {% else %}
         <p>{{ message.content }}</p>
       {% endif %}
