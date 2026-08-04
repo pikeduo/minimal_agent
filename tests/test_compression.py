@@ -75,6 +75,36 @@ def test_compressor_keeps_recent_messages_and_preserves_original_history(tmp_pat
     assert len(messages.list_for_session(user_id="user-a", session_id="session-compression")) == 5
 
 
+def test_context_keeps_only_configured_recent_messages_after_compression(tmp_path) -> None:
+    sessions, messages, summaries, tool_results = make_components(tmp_path)
+    append_messages(messages, 6)
+    compressor = ContextCompressor(
+        message_repository=messages,
+        summary_repository=summaries,
+        max_context_messages=5,
+        keep_recent=2,
+    )
+    builder = ContextBuilder(
+        session_repository=sessions,
+        message_repository=messages,
+        tool_result_repository=tool_results,
+        max_messages=5,
+        max_tool_results=5,
+        compressor=compressor,
+    )
+
+    context = builder.build(user_id="user-a", session_id="session-compression")
+
+    assert context.compressed is True
+    assert context.summary is not None
+    assert "历史消息 1" in context.summary
+    assert "历史消息 4" in context.summary
+    assert [message.message_id for message in context.messages] == [
+        "message-5",
+        "message-6",
+    ]
+
+
 def test_compressor_uses_coverage_cursor_to_avoid_duplicate_summaries(tmp_path) -> None:
     _, messages, summaries, _ = make_components(tmp_path)
     append_messages(messages, 5)

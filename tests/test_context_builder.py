@@ -21,9 +21,11 @@ from minimal_agent.storage import (
     MessageRepository,
     SessionRepository,
     SQLiteDatabase,
+    SQLiteTodoService,
     ToolResultRepository,
+    TodoRepository,
 )
-from minimal_agent.tools import CalculatorTool, ToolRegistry
+from minimal_agent.tools import CalculatorTool, TodoTool, ToolRegistry, WeatherTool
 
 
 def make_components(tmp_path):
@@ -207,3 +209,107 @@ def test_conversation_service_rejects_other_user_session_access(tmp_path) -> Non
             session_id="session-private",
             content="越权访问。",
         )
+
+
+def test_same_user_can_continue_two_isolated_sessions_with_independent_todos(
+    tmp_path,
+) -> None:
+    database = SQLiteDatabase(tmp_path / "multi-session.sqlite3")
+    database.initialize()
+    sessions = SessionRepository(database)
+    messages = MessageRepository(database)
+    tool_results = ToolResultRepository(database)
+    todos = TodoRepository(database)
+    sessions.create(user_id="user-a", title="天气", session_id="session-weather")
+    sessions.create(user_id="user-a", title="周报", session_id="session-report")
+
+    registry = ToolRegistry()
+    registry.register(WeatherTool())
+    registry.register(TodoTool())
+    provider = ScriptedLLMProvider(
+        (
+            ToolCallBatch(
+                (ToolCall("call-weather", "weather", {"location": "厦门"}),)
+            ),
+            FinalAnswer("厦门晴，温度 28℃。"),
+            ToolCallBatch(
+                (
+                    ToolCall(
+                        "call-weather-todo",
+                        "todo",
+                        {"action": "add", "title": "出门带伞"},
+                    ),
+                )
+            ),
+            FinalAnswer("已在天气会话记录待办。"),
+            ToolCallBatch(
+                (
+                    ToolCall(
+                        "call-report-todo",
+                        "todo",
+                        {"action": "add", "title": "整理本周周报"},
+                    ),
+                )
+            ),
+            FinalAnswer("已在周报会话记录待办。"),
+            FinalAnswer("窗口 1 的待办是出门带伞。"),
+        )
+    )
+    service = ConversationService(
+        context_builder=ContextBuilder(
+            session_repository=sessions,
+            message_repository=messages,
+            tool_result_repository=tool_results,
+            max_messages=12,
+            max_tool_results=12,
+        ),
+        message_repository=messages,
+        tool_result_repository=tool_results,
+        runtime=AgentRuntime(
+            provider=provider,
+            tool_registry=registry,
+            model="scripted-model",
+            max_steps=4,
+            todo_service=SQLiteTodoService(todos),
+        ),
+    )
+
+    service.respond(
+        user_id="user-a",
+        session_id="session-weather",
+        content="查询厦门天气。",
+    )
+    service.respond(
+        user_id="user-a",
+        session_id="session-weather",
+        content="记一个待办：出门带伞。",
+    )
+    service.respond(
+        user_id="user-a",
+        session_id="session-report",
+        content="写周报并记一个待办：整理本周周报。",
+    )
+    follow_up = service.respond(
+        user_id="user-a",
+        session_id="session-weather",
+        content="窗口 1 的待办是什么？",
+    )
+
+    assert follow_up.assistant_message is not None
+    assert follow_up.assistant_message.content == "窗口 1 的待办是出门带伞。"
+    assert [todo.title for todo in todos.list_for_session(
+        user_id="user-a", session_id="session-weather"
+    )] == ["出门带伞"]
+    assert [todo.title for todo in todos.list_for_session(
+        user_id="user-a", session_id="session-report"
+    )] == ["整理本周周报"]
+    assert [message.content for message in provider.received_requests[-1].messages] == [
+        "查询厦门天气。",
+        "厦门晴，温度 28℃。",
+        "记一个待办：出门带伞。",
+        "已在天气会话记录待办。",
+        "窗口 1 的待办是什么？",
+    ]
+    assert "写周报并记一个待办：整理本周周报。" not in [
+        message.content for message in provider.received_requests[-1].messages
+    ]

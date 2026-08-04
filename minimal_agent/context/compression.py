@@ -53,6 +53,12 @@ class ContextCompressor:
         self._max_context_messages = max_context_messages
         self._keep_recent = keep_recent
 
+    @property
+    def keep_recent(self) -> int:
+        """返回发生压缩后仍以原文保留的最近消息数量。"""
+
+        return self._keep_recent
+
     def compress(self, *, user_id: str, session_id: str) -> CompressionResult:
         """压缩超过阈值的旧消息，并通过游标避免重复处理。"""
 

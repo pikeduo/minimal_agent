@@ -73,8 +73,14 @@ class ContextBuilder:
             session_id=session_id,
             limit=self._max_tool_results,
         )
+        message_limit = (
+            self._compressor.keep_recent
+            if compression_result is not None
+            and compression_result.summary is not None
+            else self._max_messages
+        )
         return SessionContext(
-            messages=messages[-self._max_messages :],
+            messages=messages[-message_limit:],
             tool_results=tool_results,
             summary=compression_result.summary.content
             if compression_result is not None and compression_result.summary is not None

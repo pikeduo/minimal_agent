@@ -17,7 +17,7 @@ from ..auth import hash_password, new_session_token, verify_password
 from ..config import Settings
 from ..context import ConversationService
 from ..errors import DomainValidationError, ResourceNotFoundError
-from ..models import ProviderErrorKind
+from ..models import ProviderErrorKind, RunStatus
 from ..providers.base import LLMProvider
 from ..storage import (
     AuthSessionRepository,
@@ -618,6 +618,8 @@ def _todo_response(
 def _run_status(runtime_result: Any) -> str:
     """将 Runtime 结果压缩为不包含参数和原始响应的状态文本。"""
 
+    if runtime_result.run.status is RunStatus.MAX_STEPS:
+        return "运行已达到最大轮次限制。"
     if runtime_result.tool_results:
         tool_names = "、".join(result.tool_name for result in runtime_result.tool_results)
         return f"已完成工具调用：{tool_names}"
@@ -625,8 +627,10 @@ def _run_status(runtime_result: Any) -> str:
 
 
 def _runtime_error_message(runtime_result: Any) -> str | None:
-    """只向页面返回 Provider 已提供的安全错误摘要。"""
+    """向页面返回 Provider 错误或最大轮次终止的安全摘要。"""
 
+    if runtime_result.run.status is RunStatus.MAX_STEPS:
+        return "Agent 已达到最大轮次限制，请调整问题后重新发送。"
     if runtime_result.provider_error is None:
         return None
     return runtime_result.provider_error.safe_message

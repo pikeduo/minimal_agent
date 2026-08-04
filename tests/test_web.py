@@ -296,6 +296,30 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert "2 + 3&quot;" not in response.text
 
 
+def test_htmx_message_submission_reports_max_agent_steps_safely(tmp_path) -> None:
+    client = make_client(
+        tmp_path,
+        tuple(
+            ToolCallBatch(
+                (ToolCall(f"call-{index}", "calculator", {"expression": "1 + 1"}),)
+            )
+            for index in range(1, 5)
+        ),
+    )
+    session_id = create_session(client)
+
+    response = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "请持续计算。"},
+        headers={"HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "运行已达到最大轮次限制。" in response.text
+    assert "Agent 已达到最大轮次限制，请调整问题后重新发送。" in response.text
+    assert "已完成回复。" not in response.text
+
+
 def test_todo_htmx_add_and_complete_are_scoped_to_session(tmp_path) -> None:
     client = make_client(tmp_path, ())
     session_id = create_session(client)
