@@ -72,7 +72,11 @@ def make_request(**overrides: object) -> LLMRequest:
 
 
 def response_with_message(
-    *, content: str | None = None, tool_calls: object = None, **attributes: object
+    *,
+    content: str | None = None,
+    tool_calls: object = None,
+    finish_reason: str | None = None,
+    **attributes: object,
 ) -> object:
     message_attributes = {
         "content": content,
@@ -81,7 +85,10 @@ def response_with_message(
     }
     return SimpleNamespace(
         choices=[
-            SimpleNamespace(message=SimpleNamespace(**message_attributes))
+            SimpleNamespace(
+                message=SimpleNamespace(**message_attributes),
+                finish_reason=finish_reason,
+            )
         ]
     )
 
@@ -233,6 +240,24 @@ def test_deepseek_provider_ignores_full_reasoning_content() -> None:
     result = provider.complete(make_request())
 
     assert result == FinalAnswer("结果是 2。")
+
+
+def test_deepseek_provider_rejects_length_truncated_response_safely() -> None:
+    client, _ = make_client(
+        response_with_message(
+            content="这是一段在中途被截断的回答",
+            finish_reason="length",
+        )
+    )
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    result = provider.complete(make_request())
+
+    assert result == ProviderError(
+        kind=ProviderErrorKind.INCOMPLETE_RESPONSE,
+        safe_message="模型回复不完整，请重新发送。",
+        retryable=True,
+    )
 
 
 def test_deepseek_provider_rejects_overlong_decision_summary_safely() -> None:

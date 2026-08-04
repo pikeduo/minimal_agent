@@ -78,6 +78,7 @@ class ProviderErrorKind(str, Enum):
     """Provider 错误的稳定分类。"""
 
     AUTHENTICATION = "authentication"
+    INCOMPLETE_RESPONSE = "incomplete_response"
     INVALID_RESPONSE = "invalid_response"
     RATE_LIMIT = "rate_limit"
     UNAVAILABLE = "unavailable"

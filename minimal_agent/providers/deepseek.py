@@ -279,7 +279,15 @@ class DeepSeekProvider:
             choices = response.choices
             if not choices:
                 raise ValueError("响应没有候选项")
-            message = choices[0].message
+            choice = choices[0]
+            if getattr(choice, "finish_reason", None) in {"length", "max_tokens"}:
+                return cls._error(
+                    ProviderErrorKind.INCOMPLETE_RESPONSE,
+                    "模型回复不完整，请重新发送。",
+                    retryable=True,
+                )
+
+            message = choice.message
             decision_summary = cls._parse_decision_summary(message)
             raw_calls = message.tool_calls or ()
             if raw_calls:
