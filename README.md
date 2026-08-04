@@ -1,81 +1,74 @@
-# Minimal Agent Runtime
+# Minimal Agent
 
-一个从零实现的最小 Web Agent Runtime。项目不依赖 LangChain、LangGraph 或其他 Agent 框架；Runtime、工具调度、Session、Context、压缩和 Trace 均由本仓库实现。
+Minimal Agent 是一个轻量的 Web Agent：它可以维护多个会话、调用受控工具、保存 Todo，并在本地保留脱敏的运行记录。核心 Runtime、工具调度、Session、Context 和 Trace 都在本项目内实现。
 
-## 功能概览
+## 快速开始
 
-- 基于 OpenAI-compatible SDK 的 DeepSeek Provider，默认模型为 `deepseek-v4-flash`。
-- 内部 DTO 隔离供应商 SDK；支持最终回答、单/多工具调用、工具失败修正和最大步数终止。
-- 内置 `calculator`、确定性 Mock `search`/`weather` 与 SQLite `todo` 工具。
-- SQLite 持久化 Session、用户/助手消息、Todo、工具结果与会话摘要。
-- Context 只组合当前 Session 的摘要、近期消息和相关工具结果；超限历史使用确定性压缩。
-- 脱敏 JSONL Trace，记录运行、LLM 和工具生命周期，不记录密钥、原始响应、Traceback 或完整推理内容。
-- FastAPI + Jinja2 + HTMX 的 Session 列表、聊天、Todo 和设置页面。
+### 1. 创建 Conda 环境
 
-## 运行环境
-
-- Python 3.11 或更高版本。
-- 可选：DeepSeek API Key。未配置 Key 时，Web 页面仍可运行，但发送消息会返回安全配置提示，不会访问网络。
-
-## 安装
-
-建议在虚拟环境中安装：
+首次使用时创建 Python 3.11 环境；已存在同名环境时直接激活即可。
 
 ```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
+conda create -n minimal_agent python=3.11 -y
+conda activate minimal_agent
 python -m pip install -e ".[dev]"
 ```
 
-如果 PowerShell 阻止激活脚本，可在当前终端执行：
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-```
-
-## 配置
-
-复制示例配置后，只在本机 `.env` 中填入真实密钥：
+### 2. 配置本地环境
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-`.env` 示例：
+如需使用 DeepSeek，在 `.env` 中填写自己的 Key：
 
 ```dotenv
 OPENAI_API_KEY=你的_DeepSeek_API_Key
 OPENAI_MODEL=deepseek-v4-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com
-DATABASE_PATH=data/minimal_agent.sqlite3
-TRACE_PATH=logs/agent-trace.jsonl
-MAX_AGENT_STEPS=8
-MAX_CONTEXT_MESSAGES=24
-CONTEXT_KEEP_RECENT=12
 ```
 
-虽然环境变量名称为 `OPENAI_API_KEY`，它在本项目中用于 OpenAI-compatible SDK 的 DeepSeek Key。请勿提交 `.env`、`data/` 或 `logs/`。
+`OPENAI_API_KEY` 是 OpenAI-compatible SDK 使用的变量名，在这里填写 DeepSeek Key。`.env`、数据库和 Trace 日志仅保留在本机，不应提交到 Git。
 
-## 启动 Web 应用
+未配置 Key 也可以启动页面、创建会话和管理 Todo；发送聊天消息时会显示安全的配置提示，不会发起网络请求。
+
+### 3. 启动应用
 
 ```powershell
 python -m uvicorn minimal_agent.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-浏览器打开 <http://127.0.0.1:8000>，创建 Session 后即可聊天。不同浏览器标签页使用不同的 `/sessions/{session_id}` URL，因此同一开发身份可并行维护多个独立会话。
+打开 <http://127.0.0.1:8000>，创建会话后即可开始使用。
 
-当前版本的身份仅用于本地演示：默认身份为 `demo-user`，也可由开发请求头 `X-User-ID` 指定。路由、表单和 URL 都不能指定目标用户；每次 Session/Todo 访问仍由 `user_id + session_id` 双重授权。生产环境必须替换为真实认证，不应信任客户端自报身份。
+## 使用说明
+
+- **会话**：每个会话都有独立 URL，可在多个浏览器标签页分别打开和继续对话。
+- **聊天**：消息通过 HTMX 局部更新；页面只显示用户消息、最终回答和简化工具状态。
+- **Todo**：可在当前会话中新增和完成待办，不会出现在其他会话。
+- **设置**：显示模型与运行限制，不显示 API Key。
+
+当前身份机制仅用于本地开发：默认用户为 `demo-user`。服务端始终以 `user_id + session_id` 校验 Session 和 Todo 所有权；生产部署前应接入真实认证。
+
+## 可用能力
+
+| 能力 | 说明 |
+| --- | --- |
+| DeepSeek Provider | 通过 OpenAI-compatible SDK 调用，默认模型为 `deepseek-v4-flash`。 |
+| `calculator` | 使用受限 AST 计算四则运算和括号表达式，不执行任意代码。 |
+| `search`、`weather` | 使用确定性 Mock 数据，适合离线演示和测试。 |
+| `todo` | 使用 SQLite 保存当前会话的待办。 |
+| Context | 使用当前会话摘要、近期消息与相关工具结果支持追问。 |
+| Trace | 以 JSONL 记录运行事件，并自动清除敏感字段。 |
 
 ## 测试
 
-普通测试全部离线，不调用真实模型服务：
+普通测试完全离线：
 
 ```powershell
 python -m pytest --basetemp .pytest-tmp
 ```
 
-其中 DeepSeek Smoke Test 默认跳过。仅在你明确希望发起一次真实请求、并已设置本机 Key 时才执行：
+真实 DeepSeek Smoke Test 默认跳过。只有在已设置本机 Key 且明确同意消耗 API 配额时才运行：
 
 ```powershell
 $env:RUN_LLM_SMOKE = "1"
@@ -83,48 +76,9 @@ python -m pytest tests/test_deepseek_smoke.py -m smoke --basetemp .pytest-tmp
 Remove-Item Env:RUN_LLM_SMOKE
 ```
 
-Smoke Test 会消耗真实 API 配额；未设置 `RUN_LLM_SMOKE=1` 或没有 `OPENAI_API_KEY` 时不会宣称通过。
+## 数据与安全
 
-## 架构与数据边界
-
-```text
-FastAPI / Jinja2 / HTMX
-           │
-ConversationService ── ContextBuilder ── SQLite
-           │                    │
-      AgentRuntime ───── ContextCompressor
-       │       │
-Provider  ToolRegistry ── calculator / search / weather / todo
-       │
-DeepSeek OpenAI-compatible API
-```
-
-`AgentRuntime` 只接收内部 `LLMRequest`，Provider 返回 `FinalAnswer`、`ToolCallBatch` 或安全 `ProviderError`。Provider 原始响应不会传递到 Runtime、存储或页面。
-
-### Context 与 Memory
-
-每次请求只使用当前 Session 的：
-
-1. 确定性摘要；
-2. 最近原始消息；
-3. 对追问有价值的近期 `ToolResult`；
-4. 当前 Run 的工具交互。
-
-当消息数超过阈值时，`ContextCompressor` 保留最近消息，将较早、尚未覆盖的消息追加到摘要，并记录覆盖游标；原始消息不会删除，也不会重复压缩。项目当前实现的是 Session 内短期记忆，不包含跨 Session 的长期向量检索。
-
-### Trace 与安全
-
-Trace 使用 `TRACE_PATH` 所指向的 JSONL 文件，按 `run_id` 关联 `run.started`、`context.built`、`llm.requested`、工具和结束事件。Trace 仅保留最小状态元数据；会清除 API Key、Authorization、token、Traceback、原始响应及完整思维链。
-
-页面仅显示用户消息、最终回答、Todo 和简化工具状态，不显示工具参数、SDK 响应或推理文本。
-
-## 已知边界
-
-- `search` 与 `weather` 是确定性 Mock 工具，不访问互联网。
-- Web 身份是开发期占位方案；尚未实现生产认证、同一 Session 的并发串行化或流式输出。
-- DeepSeek 工具调用显式关闭 thinking mode，以避免保存或回传完整 reasoning 内容。
-
-## 演示与 AI 记录
-
-- 本地录屏步骤见 `docs/recording-guide.md`（该目录按项目规则不上传 Git）。
-- AI 辅助开发记录见 `docs/ai-prompts-and-decisions.md`（不包含密钥、完整推理或原始模型响应）。
+- 会话、消息、Todo 和工具结果存储在 SQLite；历史过长时会生成确定性摘要，原始消息不会被删除。
+- Trace 按 `run_id` 关联运行、模型和工具事件，不记录 API Key、Authorization、原始模型响应、Traceback 或完整推理内容。
+- `search` 与 `weather` 不访问互联网；它们是稳定的本地 Mock 工具。
+- 当前不包含生产认证、流式输出或同一 Session 的并发串行化。

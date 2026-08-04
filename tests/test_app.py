@@ -29,7 +29,7 @@ def test_home_page_is_available_without_leaking_api_key(tmp_path) -> None:
     response = make_client(tmp_path).get("/")
 
     assert response.status_code == 200
-    assert "Minimal Agent Runtime" in response.text
+    assert "Minimal Agent" in response.text
     assert "test-secret-that-must-not-be-rendered" not in response.text
 
 

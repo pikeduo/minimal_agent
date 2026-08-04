@@ -50,7 +50,7 @@ def create_app(
 
     app_settings = settings or load_settings()
     services = _build_services(app_settings, provider=provider)
-    app = FastAPI(title="Minimal Agent Runtime", version="0.1.0")
+    app = FastAPI(title="Minimal Agent", version="0.1.0")
     app.state.settings = app_settings
     app.state.services = services
     app.mount(

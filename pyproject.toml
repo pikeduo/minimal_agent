@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "minimal-agent"
 version = "0.1.0"
-description = "从零实现的最小可用 Web Agent Runtime。"
+description = "Minimal Agent：从零实现的轻量 Web Agent。"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115,<1.0",
