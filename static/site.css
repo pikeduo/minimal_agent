@@ -63,7 +63,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .page-header h1 { margin: .18rem 0 .5rem; font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.055em; line-height: 1.02; }
 .page-header > p:last-child { margin: 0; color: #66718e; line-height: 1.65; }
 .chat-page-header { margin-bottom: 1.4rem; }
-.back-link { display: inline-block; margin-bottom: 1rem; font-size: .92rem; font-weight: 700; text-decoration: none; }
+.back-form { margin: 0; }
+.back-link { display: inline-block; margin: 0 0 1rem; padding: 0; color: #3c46ce; background: transparent; box-shadow: none; font-size: .92rem; font-weight: 700; text-decoration: none; }
+.back-link:hover { color: #2935b5; background: transparent; box-shadow: none; transform: none; text-decoration: underline; }
 .eyebrow { margin: 0; color: #5360ce; font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 
 .panel {

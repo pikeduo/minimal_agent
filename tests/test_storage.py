@@ -78,6 +78,66 @@ def test_sessions_and_messages_are_isolated_by_user_and_session(repositories) ->
         messages.list_for_session(user_id="user-b", session_id=window_one.session_id)
 
 
+def test_empty_session_can_be_renamed_once_or_removed(repositories) -> None:
+    sessions, messages, todos = repositories
+    empty_session = sessions.create(
+        user_id="user-a",
+        title="新会话",
+        session_id="session-empty",
+    )
+
+    renamed = sessions.update_title_if_empty(
+        user_id="user-a",
+        session_id=empty_session.session_id,
+        title="第一条用户消息",
+    )
+    messages.append(
+        Message(
+            message_id="message-first",
+            user_id="user-a",
+            session_id=empty_session.session_id,
+            role=MessageRole.USER,
+            content="第一条用户消息",
+            created_at=datetime(2026, 8, 4, tzinfo=timezone.utc),
+        )
+    )
+    renamed_again = sessions.update_title_if_empty(
+        user_id="user-a",
+        session_id=empty_session.session_id,
+        title="不应覆盖首条消息",
+    )
+    retained = sessions.delete_if_empty(
+        user_id="user-a",
+        session_id=empty_session.session_id,
+    )
+
+    removable_session = sessions.create(
+        user_id="user-a",
+        title="新会话",
+        session_id="session-removable",
+    )
+    todos.add(
+        user_id="user-a",
+        session_id=removable_session.session_id,
+        title="离开前的待办",
+        todo_id="todo-removable",
+    )
+    removed = sessions.delete_if_empty(
+        user_id="user-a",
+        session_id=removable_session.session_id,
+    )
+
+    assert renamed is True
+    assert sessions.get(user_id="user-a", session_id=empty_session.session_id).title == "第一条用户消息"
+    assert renamed_again is False
+    assert retained is False
+    assert removed is True
+    with pytest.raises(ResourceNotFoundError):
+        sessions.get(user_id="user-a", session_id=removable_session.session_id)
+    with pytest.raises(ResourceNotFoundError):
+        todos.list_for_session(user_id="user-a", session_id=removable_session.session_id)
+
+
 def test_todo_repository_crud_and_session_isolation(repositories) -> None:
     sessions, _, todos = repositories
     sessions.create(user_id="user-a", title="窗口一", session_id="session-one")

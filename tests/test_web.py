@@ -62,10 +62,9 @@ def second_user_client(client: TestClient, username: str = "user-b") -> TestClie
     return other_client
 
 
-def create_session(client: TestClient, title: str) -> str:
+def create_session(client: TestClient) -> str:
     response = client.post(
         "/sessions",
-        data={"title": title},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -74,16 +73,16 @@ def create_session(client: TestClient, title: str) -> str:
 
 def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     client = make_client(tmp_path, ())
-    session_id = create_session(client, "工作计划")
-    create_session(client, "第二个窗口")
+    session_id = create_session(client)
+    create_session(client)
 
     home = client.get("/")
     chat = client.get(f"/sessions/{session_id}")
     settings = client.get("/settings")
 
     assert home.status_code == 200
-    assert "工作计划" in home.text
-    assert "第二个窗口" in home.text
+    assert "新会话" in home.text
+    assert 'name="title"' not in home.text
     assert 'href="/static/site.css?v=20260804-2"' in home.text
     assert f"/sessions/{session_id}" in home.text
     assert f"/sessions/{session_id}/delete" in home.text
@@ -93,6 +92,8 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert 'id="chat-panel"' in chat.text
     assert 'id="todos-panel"' in chat.text
     assert 'id="browser-key-chat-status"' in chat.text
+    assert f'action="/sessions/{session_id}/leave"' in chat.text
+    assert f'data-empty-session-leave-url="/sessions/{session_id}/leave"' in chat.text
     assert settings.status_code == 200
     assert "deepseek-v4-flash" in settings.text
     assert "test-secret-that-must-not-be-rendered" not in settings.text
@@ -114,12 +115,15 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert "X-DeepSeek-API-Key" in script.text
     assert "submitChatWithBrowserKey" in script.text
     assert '"HX-Request": "true"' in script.text
+    assert "initializeEmptySessionCleanup" in script.text
+    assert "navigator.sendBeacon" in script.text
 
 
 def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> None:
     client = TestClient(create_app(make_settings(tmp_path), provider=ScriptedLLMProvider(())))
 
     anonymous_home = client.get("/", follow_redirects=False)
+    anonymous_create = client.post("/sessions", follow_redirects=False)
     invalid_register = client.post(
         "/register",
         data={"username": "ab", "password": "password-123"},
@@ -143,6 +147,8 @@ def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> Non
 
     assert anonymous_home.status_code == 303
     assert anonymous_home.headers["location"] == "/login"
+    assert anonymous_create.status_code == 303
+    assert anonymous_create.headers["location"] == "/login"
     assert invalid_register.status_code == 422
     assert "用户名只能使用" in invalid_register.text
     assert registered.status_code == 303
@@ -155,6 +161,42 @@ def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> Non
     assert logged_in.status_code == 303
     assert home.status_code == 200
     assert "safe-user" in home.text
+
+
+def test_new_session_uses_first_message_as_title_and_removes_empty_session_on_leave(tmp_path) -> None:
+    client = make_client(tmp_path, (FinalAnswer("已记录首条消息。"),))
+    user_id = current_user_id(client)
+
+    empty_session_id = create_session(client)
+    empty_leave = client.post(
+        f"/sessions/{empty_session_id}/leave",
+        follow_redirects=False,
+    )
+
+    assert empty_leave.status_code == 303
+    assert empty_leave.headers["location"] == "/"
+    assert client.get(f"/sessions/{empty_session_id}").status_code == 404
+    assert client.app.state.services.session_repository.list_for_user(user_id=user_id) == ()
+
+    session_id = create_session(client)
+    sent = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "整理本周面试项目的测试结果"},
+        headers={"HX-Request": "true"},
+    )
+    retained_leave = client.post(
+        f"/sessions/{session_id}/leave",
+        follow_redirects=False,
+    )
+    session = client.app.state.services.session_repository.get(
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    assert sent.status_code == 200
+    assert session.title == "整理本周面试项目的测试结果"
+    assert retained_leave.status_code == 303
+    assert client.get(f"/sessions/{session_id}").status_code == 200
 
 
 def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_path) -> None:
@@ -174,7 +216,7 @@ def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_p
         )
     )
     register_user(client, "user-a")
-    session_id = create_session(client, "浏览器密钥窗口")
+    session_id = create_session(client)
 
     response = client.post(
         f"/sessions/{session_id}/messages",
@@ -198,7 +240,7 @@ def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_p
 
 def test_invalid_browser_key_header_is_rejected_without_leaking_value(tmp_path) -> None:
     client = make_client(tmp_path, ())
-    session_id = create_session(client, "密钥校验窗口")
+    session_id = create_session(client)
     invalid_key = "a" * 513
 
     response = client.post(
@@ -222,7 +264,7 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
             FinalAnswer("计算结果为 5。"),
         ),
     )
-    session_id = create_session(client, "计算窗口")
+    session_id = create_session(client)
 
     response = client.post(
         f"/sessions/{session_id}/messages",
@@ -241,7 +283,7 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
 
 def test_todo_htmx_add_and_complete_are_scoped_to_session(tmp_path) -> None:
     client = make_client(tmp_path, ())
-    session_id = create_session(client, "待办窗口")
+    session_id = create_session(client)
 
     added = client.post(
         f"/sessions/{session_id}/todos",
@@ -272,7 +314,7 @@ def test_todo_htmx_add_and_complete_are_scoped_to_session(tmp_path) -> None:
 def test_cross_user_session_routes_return_not_found(tmp_path) -> None:
     client = make_client(tmp_path, ())
     other_client = second_user_client(client)
-    session_id = create_session(client, "私有窗口")
+    session_id = create_session(client)
 
     page = other_client.get(f"/sessions/{session_id}")
     todo = other_client.get(f"/sessions/{session_id}/todos")
@@ -291,7 +333,7 @@ def test_cross_user_session_routes_return_not_found(tmp_path) -> None:
 def test_delete_session_removes_related_data_and_rejects_cross_user(tmp_path) -> None:
     client = make_client(tmp_path, (FinalAnswer("已保存。"),))
     other_client = second_user_client(client)
-    session_id = create_session(client, "待删除会话")
+    session_id = create_session(client)
     client.post(
         f"/sessions/{session_id}/todos",
         data={"title": "会话内待办"},
@@ -328,7 +370,7 @@ def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> No
         create_app(replace(make_settings(tmp_path), openai_api_key=None))
     )
     register_user(client, "user-a")
-    session_id = create_session(client, "未配置模型")
+    session_id = create_session(client)
 
     response = client.post(
         f"/sessions/{session_id}/messages",
@@ -345,7 +387,7 @@ def test_message_validation_does_not_consume_provider_and_normal_form_redirects(
     provider = ScriptedLLMProvider((FinalAnswer("已保存消息。"),))
     client = TestClient(create_app(make_settings(tmp_path), provider=provider))
     register_user(client, "user-a")
-    session_id = create_session(client, "普通表单")
+    session_id = create_session(client)
 
     invalid = client.post(
         f"/sessions/{session_id}/messages",
@@ -373,8 +415,8 @@ def test_message_validation_does_not_consume_provider_and_normal_form_redirects(
 
 def test_web_rejects_invalid_identity_session_and_cross_session_todo(tmp_path) -> None:
     client = make_client(tmp_path, ())
-    first_session_id = create_session(client, "第一个窗口")
-    second_session_id = create_session(client, "第二个窗口")
+    first_session_id = create_session(client)
+    second_session_id = create_session(client)
     client.post(
         f"/sessions/{first_session_id}/todos",
         data={"title": "仅属于第一个窗口"},

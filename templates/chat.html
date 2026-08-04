@@ -4,7 +4,14 @@
 
 {% block content %}
   <header class="page-header chat-page-header">
-    <p><a class="back-link" href="/">← 返回会话列表</a></p>
+    <form
+      action="/sessions/{{ session.session_id }}/leave"
+      method="post"
+      class="back-form"
+      data-empty-session-leave-url="/sessions/{{ session.session_id }}/leave"
+    >
+      <button class="back-link" type="submit">← 返回会话列表</button>
+    </form>
     <p class="eyebrow">对话空间</p>
     <h1>{{ session.title }}</h1>
     <p>可使用受控工具，也可在设置中管理浏览器密钥。</p>

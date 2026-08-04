@@ -299,6 +299,82 @@ class SessionRepository(_OwnershipRepository):
                 (session_id, user_id),
             )
 
+    def update_title_if_empty(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        title: str,
+    ) -> bool:
+        """仅为尚无消息的会话写入首条用户消息作为标题。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        _require_text(title, name="title")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            result = connection.execute(
+                """
+                UPDATE sessions
+                SET title = ?, updated_at = ?
+                WHERE id = ? AND user_id = ?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM messages
+                    WHERE user_id = ? AND session_id = ?
+                  )
+                """,
+                (
+                    title,
+                    _timestamp(_utc_now()),
+                    session_id,
+                    user_id,
+                    user_id,
+                    session_id,
+                ),
+            )
+        return result.rowcount == 1
+
+    def delete_if_empty(self, *, user_id: str, session_id: str) -> bool:
+        """仅删除没有聊天消息的新会话，并同步清理其关联数据。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            has_messages = connection.execute(
+                """
+                SELECT 1 FROM messages
+                WHERE user_id = ? AND session_id = ?
+                LIMIT 1
+                """,
+                (user_id, session_id),
+            ).fetchone()
+            if has_messages is not None:
+                return False
+            for table_name in (
+                "messages",
+                "tool_results",
+                "session_summaries",
+                "todos",
+            ):
+                connection.execute(
+                    f"DELETE FROM {table_name} WHERE user_id = ? AND session_id = ?",
+                    (user_id, session_id),
+                )
+            result = connection.execute(
+                "DELETE FROM sessions WHERE id = ? AND user_id = ?",
+                (session_id, user_id),
+            )
+        return result.rowcount == 1
+
 
 class MessageRepository(_OwnershipRepository):
     """追加并读取属于当前用户和 Session 的消息。"""

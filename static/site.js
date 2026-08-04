@@ -80,6 +80,21 @@
     });
   }
 
+  function initializeEmptySessionCleanup() {
+    const leaveForm = document.querySelector("[data-empty-session-leave-url]");
+    const leaveUrl = leaveForm?.dataset.emptySessionLeaveUrl;
+    if (!leaveUrl || !navigator.sendBeacon) {
+      return;
+    }
+    window.addEventListener(
+      "pagehide",
+      () => {
+        navigator.sendBeacon(leaveUrl);
+      },
+      { once: true },
+    );
+  }
+
   function isChatForm(form) {
     return form instanceof HTMLFormElement && /\/sessions\/[^/]+\/messages$/.test(form.action);
   }
@@ -136,7 +151,10 @@
     }
   }
 
-  document.addEventListener("DOMContentLoaded", initializeKeyControls);
+  document.addEventListener("DOMContentLoaded", () => {
+    initializeKeyControls();
+    initializeEmptySessionCleanup();
+  });
   document.addEventListener("submit", submitChatWithBrowserKey, true);
 
   document.body.addEventListener("htmx:configRequest", (event) => {

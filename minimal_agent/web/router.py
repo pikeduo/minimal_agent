@@ -30,7 +30,6 @@ from ..storage import (
 
 _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
 _MAX_MESSAGE_LENGTH = 4_000
-_MAX_SESSION_TITLE_LENGTH = 100
 _MAX_TODO_TITLE_LENGTH = 200
 _AUTH_COOKIE_NAME = "minimal_agent_session"
 
@@ -153,27 +152,28 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         )
 
     @router.post("/sessions")
-    def create_session(
-        request: Request,
-        title: str = Form("新会话"),
-    ) -> Response:
-        user_id = _require_current_user(request, services).user_id
-        cleaned_title = _clean_text(
-            title,
-            field_name="会话标题",
-            max_length=_MAX_SESSION_TITLE_LENGTH,
-        )
-        if cleaned_title is None:
-            return _validation_error(
-                request,
-                templates,
-                "会话标题不能为空且不能过长。",
-            )
+    def create_session(request: Request) -> Response:
+        """创建暂定标题的新会话；未登录用户进入登录页。"""
+
+        user = _current_user(request, services)
+        if user is None:
+            return RedirectResponse(url="/login", status_code=303)
         session = services.session_repository.create(
-            user_id=user_id,
-            title=cleaned_title,
+            user_id=user.user_id,
+            title="新会话",
         )
         return RedirectResponse(url=f"/sessions/{session.session_id}", status_code=303)
+
+    @router.post("/sessions/{session_id}/leave")
+    def leave_session(request: Request, session_id: str) -> RedirectResponse:
+        """离开会话时清理尚未输入任何聊天内容的新会话。"""
+
+        user_id = _require_current_user(request, services).user_id
+        services.session_repository.delete_if_empty(
+            user_id=user_id,
+            session_id=session_id,
+        )
+        return RedirectResponse(url="/", status_code=303)
 
     @router.post("/sessions/{session_id}/delete")
     def delete_session(request: Request, session_id: str) -> RedirectResponse:
@@ -238,6 +238,12 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         )
         if cleaned_content is None:
             return _validation_error(request, templates, "消息不能为空且不能过长。")
+
+        services.session_repository.update_title_if_empty(
+            user_id=user_id,
+            session_id=session_id,
+            title=cleaned_content,
+        )
 
         browser_api_key = _browser_api_key(request)
         try:
