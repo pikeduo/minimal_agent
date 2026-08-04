@@ -1,0 +1,10 @@
+<div id="chat-messages" class="message-list">
+  {% for message in messages %}
+    <article class="message message-{{ message.role.value }}">
+      <h2>{% if message.role.value == 'user' %}你{% elif message.role.value == 'assistant' %}助手{% else %}{{ message.role.value }}{% endif %}</h2>
+      <p>{{ message.content }}</p>
+    </article>
+  {% else %}
+    <p class="empty-state">发送一条消息以开始对话。</p>
+  {% endfor %}
+</div>

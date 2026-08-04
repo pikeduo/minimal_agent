@@ -5,9 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Minimal Agent Runtime{% endblock %}</title>
     <link rel="stylesheet" href="/static/site.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   </head>
   <body>
     <main class="page-shell">
+      <nav aria-label="主导航">
+        <a href="/">会话</a>
+        <a href="/settings">设置</a>
+      </nav>
       {% block content %}{% endblock %}
     </main>
   </body>

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}设置｜Minimal Agent Runtime{% endblock %}
+
+{% block content %}
+  <h1>设置</h1>
+  <section class="panel">
+    <dl class="settings-list">
+      <dt>模型</dt><dd>{{ model }}</dd>
+      <dt>最大 Agent 步数</dt><dd>{{ max_agent_steps }}</dd>
+      <dt>最大 Context 消息数</dt><dd>{{ max_context_messages }}</dd>
+      <dt>Context 原文保留数</dt><dd>{{ context_keep_recent }}</dd>
+      <dt>模型服务密钥</dt><dd>{% if api_key_configured %}已配置{% else %}未配置{% endif %}</dd>
+    </dl>
+    <p>页面不会显示 API Key、Authorization、原始模型响应或完整推理内容。</p>
+  </section>
+{% endblock %}

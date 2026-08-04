@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}会话｜Minimal Agent Runtime{% endblock %}
+
+{% block content %}
+  <header>
+    <h1>会话</h1>
+    <p>当前开发身份：{{ user_id }}</p>
+  </header>
+
+  <section class="panel" aria-labelledby="new-session-title">
+    <h2 id="new-session-title">新建会话</h2>
+    <form action="/sessions" method="post">
+      <label for="session-title">会话标题</label>
+      <div class="inline-form">
+        <input id="session-title" name="title" maxlength="100" value="新会话" required>
+        <button type="submit">创建</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel" aria-labelledby="session-list-title">
+    <h2 id="session-list-title">我的会话</h2>
+    <ul id="session-list" class="session-list">
+      {% for session in sessions %}
+        <li>
+          <a href="/sessions/{{ session.session_id }}">{{ session.title }}</a>
+          <small>{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+        </li>
+      {% else %}
+        <li class="empty-state">尚无会话。</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

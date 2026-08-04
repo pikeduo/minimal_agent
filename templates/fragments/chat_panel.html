@@ -1,0 +1,7 @@
+<section id="chat-panel" class="panel" aria-live="polite">
+  {% include "fragments/messages.html" %}
+  {% include "fragments/run_status.html" %}
+  {% if error_message %}
+    {% include "fragments/error.html" %}
+  {% endif %}
+</section>

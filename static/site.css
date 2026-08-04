@@ -8,9 +8,47 @@ body {
   margin: 0;
 }
 
+a { color: #1d4ed8; }
+
+nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
 .page-shell {
   box-sizing: border-box;
   margin: 0 auto;
   max-width: 48rem;
   padding: 3rem 1.5rem;
 }
+
+.panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: .5rem;
+  background: #fff;
+}
+
+label, textarea, input { display: block; }
+textarea, input { box-sizing: border-box; width: 100%; margin: .4rem 0 .8rem; padding: .5rem; }
+button { padding: .45rem .75rem; cursor: pointer; }
+.inline-form { display: flex; gap: .5rem; align-items: end; }
+.inline-form input { margin: 0; }
+.session-list, .todo-list { padding-left: 1.2rem; }
+.session-list li, .todo-list li { margin: .6rem 0; }
+.session-list small { display: block; color: #64748b; }
+.message { margin: .75rem 0; padding: .75rem; border-radius: .5rem; }
+.message h2 { margin: 0 0 .4rem; font-size: 1rem; }
+.message p { margin: 0; white-space: pre-wrap; }
+.message-user { background: #dbeafe; }
+.message-assistant { background: #e2e8f0; }
+.todo-list form { display: inline; margin-left: .5rem; }
+.completed { color: #64748b; text-decoration: line-through; }
+.empty-state { color: #64748b; }
+.run-status { color: #334155; }
+.error-message { color: #b91c1c; font-weight: 600; }
+.settings-list { display: grid; grid-template-columns: max-content 1fr; gap: .6rem 1rem; }
+.settings-list dt { font-weight: 700; }
+.settings-list dd { margin: 0; }

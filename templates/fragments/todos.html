@@ -1,0 +1,36 @@
+<section id="todos-panel"{% if todo_oob %} hx-swap-oob="true"{% endif %} class="panel" aria-labelledby="todos-title">
+  <h2 id="todos-title">待办</h2>
+  <form
+    action="/sessions/{{ session_id }}/todos"
+    method="post"
+    hx-post="/sessions/{{ session_id }}/todos"
+    hx-target="#todos-panel"
+    hx-swap="outerHTML"
+  >
+    <label for="todo-title">新增待办</label>
+    <div class="inline-form">
+      <input id="todo-title" name="title" maxlength="200" required>
+      <button type="submit">添加</button>
+    </div>
+  </form>
+  <ul class="todo-list">
+    {% for todo in todos %}
+      <li>
+        <span{% if todo.status.value == 'completed' %} class="completed"{% endif %}>{{ todo.title }}</span>
+        {% if todo.status.value == 'open' %}
+          <form
+            action="/sessions/{{ session_id }}/todos/{{ todo.todo_id }}/complete"
+            method="post"
+            hx-post="/sessions/{{ session_id }}/todos/{{ todo.todo_id }}/complete"
+            hx-target="#todos-panel"
+            hx-swap="outerHTML"
+          >
+            <button type="submit">完成</button>
+          </form>
+        {% endif %}
+      </li>
+    {% else %}
+      <li class="empty-state">当前会话暂无待办。</li>
+    {% endfor %}
+  </ul>
+</section>

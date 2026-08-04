@@ -4,10 +4,12 @@ from minimal_agent.app import create_app
 from minimal_agent.config import load_settings
 
 
-def make_client() -> TestClient:
+def make_client(tmp_path) -> TestClient:
     settings = load_settings(
         {
             "OPENAI_API_KEY": "test-secret-that-must-not-be-rendered",
+            "DATABASE_PATH": str(tmp_path / "app.sqlite3"),
+            "TRACE_PATH": str(tmp_path / "agent-trace.jsonl"),
             "MAX_AGENT_STEPS": "8",
             "MAX_CONTEXT_MESSAGES": "24",
             "CONTEXT_KEEP_RECENT": "12",
@@ -16,15 +18,15 @@ def make_client() -> TestClient:
     return TestClient(create_app(settings))
 
 
-def test_app_factory_exposes_health_check() -> None:
-    response = make_client().get("/healthz")
+def test_app_factory_exposes_health_check(tmp_path) -> None:
+    response = make_client(tmp_path).get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_home_page_is_available_without_leaking_api_key() -> None:
-    response = make_client().get("/")
+def test_home_page_is_available_without_leaking_api_key(tmp_path) -> None:
+    response = make_client(tmp_path).get("/")
 
     assert response.status_code == 200
     assert "Minimal Agent Runtime" in response.text
