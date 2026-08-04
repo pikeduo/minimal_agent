@@ -36,6 +36,13 @@ def test_registry_exports_all_builtin_tool_schemas_in_registration_order() -> No
         "todo",
     ]
     assert registry.export_schemas()[0]["parameters"]["required"] == ["expression"]
+    todo_parameters = registry.export_schemas()[-1]["parameters"]
+    assert todo_parameters["type"] == "object"
+    assert todo_parameters["properties"]["action"]["enum"] == [
+        "add",
+        "list",
+        "complete",
+    ]
 
 
 def test_registry_rejects_duplicate_or_invalid_schema_tools() -> None:
@@ -139,6 +146,16 @@ def test_todo_requires_a_later_injected_persistence_service() -> None:
 
     assert result.status is ToolResultStatus.ERROR
     assert result.error_code == "todo_service_unavailable"
+
+
+def test_todo_returns_safe_error_when_required_action_field_is_missing() -> None:
+    registry = ToolRegistry()
+    registry.register(TodoTool())
+
+    result = registry.execute(make_call("todo", {"action": "add"}), make_context())
+
+    assert result.status is ToolResultStatus.ERROR
+    assert result.error_code == "invalid_todo_title"
 
 
 def test_registry_preserves_explicit_tool_execution_error() -> None:

@@ -141,6 +141,43 @@ def test_deepseek_provider_maps_multiple_tool_calls_to_internal_batch() -> None:
     )
 
 
+def test_deepseek_provider_removes_unsupported_length_constraints_from_tools() -> None:
+    client, completions = make_client(response_with_message(content="已处理。"))
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    result = provider.complete(
+        make_request(
+            tool_schemas=(
+                {
+                    "name": "todo",
+                    "description": "处理待办。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200,
+                            }
+                        },
+                        "required": ["title"],
+                        "additionalProperties": False,
+                    },
+                },
+            )
+        )
+    )
+
+    parameters = completions.calls[0]["tools"][0]["function"]["parameters"]
+    assert result == FinalAnswer("已处理。")
+    assert parameters == {
+        "type": "object",
+        "properties": {"title": {"type": "string"}},
+        "required": ["title"],
+        "additionalProperties": False,
+    }
+
+
 def test_deepseek_provider_sends_internal_tool_exchange_in_protocol_order() -> None:
     client, completions = make_client(response_with_message(content="工具执行完成。"))
     provider = DeepSeekProvider(api_key="test-key", client=client)

@@ -145,11 +145,35 @@ class DeepSeekProvider:
                     "function": {
                         "name": name,
                         "description": description,
-                        "parameters": dict(parameters),
+                        "parameters": DeepSeekProvider._compatible_parameters(
+                            parameters
+                        ),
                     },
                 }
             )
         return tools
+
+    @staticmethod
+    def _compatible_parameters(parameters: Mapping[str, Any]) -> dict[str, Any]:
+        """移除 DeepSeek 函数调用不接受的长度约束，保留本地执行校验。"""
+
+        def normalize(value: Any) -> Any:
+            if isinstance(value, Mapping):
+                return {
+                    key: normalize(item)
+                    for key, item in value.items()
+                    if key not in {"minLength", "maxLength"}
+                }
+            if isinstance(value, list):
+                return [normalize(item) for item in value]
+            return value
+
+        normalized_parameters = normalize(parameters)
+        if not isinstance(normalized_parameters, dict):
+            raise ValueError("工具参数必须规范化为 JSON 对象")
+        if normalized_parameters.get("type") != "object":
+            raise ValueError("DeepSeek 工具参数顶层必须是 object")
+        return normalized_parameters
 
     @staticmethod
     def _build_messages(request: LLMRequest) -> list[dict[str, Any]]:
