@@ -81,6 +81,7 @@ class ConversationService:
             session_id=session_id,
             messages=context.messages,
             historical_tool_results=context.tool_results,
+            session_summary=context.summary,
         )
         self._tool_result_repository.append_for_run(
             user_id=user_id,

@@ -11,7 +11,7 @@ from uuid import uuid4
 from ..errors import DomainValidationError, ResourceNotFoundError
 from ..models import Message, MessageRole, Session, ToolResult, ToolResultStatus
 from .database import SQLiteDatabase
-from .entities import TodoItem, TodoStatus
+from .entities import SessionSummary, TodoItem, TodoStatus
 
 
 def _utc_now() -> datetime:
@@ -476,3 +476,67 @@ class ToolResultRepository(_OwnershipRepository):
             )
             for row in reversed(rows)
         )
+
+
+class SessionSummaryRepository(_OwnershipRepository):
+    """读取和更新 Session 压缩摘要及其覆盖游标。"""
+
+    def get(self, *, user_id: str, session_id: str) -> SessionSummary | None:
+        """获取当前用户当前 Session 的摘要。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            row = connection.execute(
+                """
+                SELECT user_id, session_id, content, covered_through_message_id, updated_at
+                FROM session_summaries
+                WHERE user_id = ? AND session_id = ?
+                """,
+                (user_id, session_id),
+            ).fetchone()
+        if row is None:
+            return None
+        return SessionSummary(
+            user_id=row["user_id"],
+            session_id=row["session_id"],
+            content=row["content"],
+            covered_through_message_id=row["covered_through_message_id"],
+            updated_at=_parse_timestamp(row["updated_at"]),
+        )
+
+    def save(self, summary: SessionSummary) -> None:
+        """保存摘要并原子更新其覆盖到的最后消息 ID。"""
+
+        if not isinstance(summary, SessionSummary):
+            raise DomainValidationError("summary 必须是 SessionSummary")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=summary.user_id,
+                session_id=summary.session_id,
+            )
+            connection.execute(
+                """
+                INSERT INTO session_summaries (
+                    session_id, user_id, content, covered_through_message_id, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    user_id = excluded.user_id,
+                    content = excluded.content,
+                    covered_through_message_id = excluded.covered_through_message_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    summary.session_id,
+                    summary.user_id,
+                    summary.content,
+                    summary.covered_through_message_id,
+                    _timestamp(summary.updated_at),
+                ),
+            )

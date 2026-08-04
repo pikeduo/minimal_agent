@@ -75,12 +75,17 @@ class AgentRuntime:
         messages: tuple[Message, ...],
         run_id: str | None = None,
         historical_tool_results: tuple[ToolResult, ...] = (),
+        session_summary: str | None = None,
     ) -> RuntimeResult:
         """运行 Provider—工具循环，直到最终回答、上限或安全失败。"""
 
         self._validate_messages(user_id=user_id, session_id=session_id, messages=messages)
         if not all(isinstance(result, ToolResult) for result in historical_tool_results):
             raise DomainValidationError("historical_tool_results 只能包含 ToolResult")
+        if session_summary is not None and (
+            not isinstance(session_summary, str) or not session_summary.strip()
+        ):
+            raise DomainValidationError("session_summary 必须是非空字符串或 None")
         active_run = AgentRun(
             run_id=run_id or str(uuid4()),
             user_id=user_id,
@@ -100,6 +105,7 @@ class AgentRuntime:
                 messages=messages,
                 tool_schemas=self._tool_registry.export_schemas(),
                 tool_results=tuple((*historical_tool_results, *tool_results)),
+                session_summary=session_summary,
             )
             response = self._complete_safely(request)
 

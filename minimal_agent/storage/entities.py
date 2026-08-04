@@ -17,6 +17,30 @@ class TodoStatus(str, Enum):
 
 
 @dataclass(frozen=True)
+class SessionSummary:
+    """覆盖一段旧消息的确定性 Session 摘要。"""
+
+    user_id: str
+    session_id: str
+    content: str
+    covered_through_message_id: str
+    updated_at: datetime
+
+    def __post_init__(self) -> None:
+        for field_name in (
+            "user_id",
+            "session_id",
+            "content",
+            "covered_through_message_id",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise DomainValidationError(f"{field_name} 必须是非空字符串")
+        if self.updated_at.tzinfo is None or self.updated_at.utcoffset() is None:
+            raise DomainValidationError("updated_at 必须包含时区信息")
+
+
+@dataclass(frozen=True)
 class TodoItem:
     """已按用户和会话归属的待办记录。"""
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..errors import DomainValidationError
 from ..models import Message, ToolResult
 from ..storage import MessageRepository, SessionRepository, ToolResultRepository
+from .compression import ContextCompressor
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class SessionContext:
 
     messages: tuple[Message, ...]
     tool_results: tuple[ToolResult, ...]
+    summary: str | None = None
 
 
 class ContextBuilder:
@@ -28,6 +30,7 @@ class ContextBuilder:
         tool_result_repository: ToolResultRepository,
         max_messages: int,
         max_tool_results: int,
+        compressor: ContextCompressor | None = None,
     ) -> None:
         if not isinstance(session_repository, SessionRepository):
             raise DomainValidationError("session_repository 必须是 SessionRepository")
@@ -49,11 +52,17 @@ class ContextBuilder:
         self._tool_result_repository = tool_result_repository
         self._max_messages = max_messages
         self._max_tool_results = max_tool_results
+        self._compressor = compressor
 
     def build(self, *, user_id: str, session_id: str) -> SessionContext:
         """验证 Session 所有权后，按时间顺序返回近期上下文。"""
 
         self._session_repository.get(user_id=user_id, session_id=session_id)
+        compression_result = (
+            self._compressor.compress(user_id=user_id, session_id=session_id)
+            if self._compressor is not None
+            else None
+        )
         messages = self._message_repository.list_for_session(
             user_id=user_id,
             session_id=session_id,
@@ -66,4 +75,7 @@ class ContextBuilder:
         return SessionContext(
             messages=messages[-self._max_messages :],
             tool_results=tool_results,
+            summary=compression_result.summary.content
+            if compression_result is not None and compression_result.summary is not None
+            else None,
         )

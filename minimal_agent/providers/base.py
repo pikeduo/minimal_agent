@@ -40,6 +40,7 @@ class LLMRequest:
     messages: tuple[Message, ...]
     tool_schemas: tuple[Mapping[str, Any], ...] = ()
     tool_results: tuple[ToolResult, ...] = ()
+    session_summary: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.model, name="model")
@@ -54,6 +55,10 @@ class LLMRequest:
         object.__setattr__(self, "tool_schemas", copied_schemas)
         if not all(isinstance(result, ToolResult) for result in self.tool_results):
             raise DomainValidationError("tool_results 只能包含 ToolResult")
+        if self.session_summary is not None and (
+            not isinstance(self.session_summary, str) or not self.session_summary.strip()
+        ):
+            raise DomainValidationError("session_summary 必须是非空字符串或 None")
 
     def to_dict(self) -> dict[str, Any]:
         """生成可供 Provider Adapter 使用的内部数据副本。"""
@@ -63,6 +68,7 @@ class LLMRequest:
             "messages": [message.to_dict() for message in self.messages],
             "tool_schemas": [dict(schema) for schema in self.tool_schemas],
             "tool_results": [result.to_dict() for result in self.tool_results],
+            "session_summary": self.session_summary,
         }
 
 

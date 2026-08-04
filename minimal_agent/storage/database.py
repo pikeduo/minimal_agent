@@ -78,6 +78,16 @@ class SQLiteDatabase:
                 CREATE INDEX IF NOT EXISTS idx_tool_results_user_session_created
                     ON tool_results(user_id, session_id, id DESC);
 
+                CREATE TABLE IF NOT EXISTS session_summaries (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    covered_through_message_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (session_id, user_id)
+                        REFERENCES sessions(id, user_id)
+                );
+
                 CREATE TABLE IF NOT EXISTS todos (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
