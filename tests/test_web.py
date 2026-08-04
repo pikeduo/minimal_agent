@@ -261,7 +261,7 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
             ToolCallBatch(
                 (ToolCall("call-1", "calculator", {"expression": "2 + 3"}),)
             ),
-            FinalAnswer("计算结果为 5。"),
+            FinalAnswer("计算结果为 **5**。\n\n- 已完成计算"),
         ),
     )
     session_id = create_session(client)
@@ -275,7 +275,9 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert response.status_code == 200
     assert 'id="chat-panel"' in response.text
     assert "请计算 2 + 3。" in response.text
-    assert "计算结果为 5。" in response.text
+    assert "计算结果为 <strong>5</strong>。" in response.text
+    assert "<li>已完成计算</li>" in response.text
+    assert "**5**" not in response.text
     assert "已完成工具调用：calculator" in response.text
     assert 'hx-swap-oob="true"' in response.text
     assert "2 + 3&quot;" not in response.text

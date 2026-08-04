@@ -13,6 +13,7 @@ from minimal_agent.models import (
     ToolResultStatus,
 )
 from minimal_agent.providers import DeepSeekProvider, LLMRequest
+from minimal_agent.providers.deepseek import SYSTEM_INSTRUCTION
 from minimal_agent.runtime import AgentRuntime
 from minimal_agent.tools import CalculatorTool, ToolRegistry
 
@@ -93,6 +94,7 @@ def test_deepseek_provider_maps_final_answer_and_openai_tool_schema() -> None:
         {
             "model": "deepseek-v4-flash",
             "messages": [
+                {"role": "system", "content": SYSTEM_INSTRUCTION},
                 {"role": "system", "content": "会话摘要：用户正在计算简单表达式。"},
                 {"role": "user", "content": "请计算 1 + 1。"},
             ],
@@ -113,6 +115,18 @@ def test_deepseek_provider_maps_final_answer_and_openai_tool_schema() -> None:
             ],
         }
     ]
+
+
+def test_deepseek_provider_includes_greeting_and_capability_instruction() -> None:
+    client, completions = make_client(response_with_message(content="你好！"))
+    provider = DeepSeekProvider(api_key="test-key", client=client)
+
+    provider.complete(make_request())
+
+    system_message = completions.calls[0]["messages"][0]
+    assert system_message == {"role": "system", "content": SYSTEM_INSTRUCTION}
+    assert "简短问候" in SYSTEM_INSTRUCTION
+    assert "计算、搜索、天气查询和待办管理" in SYSTEM_INSTRUCTION
 
 
 def test_deepseek_provider_maps_multiple_tool_calls_to_internal_batch() -> None:
@@ -197,7 +211,9 @@ def test_deepseek_provider_sends_internal_tool_exchange_in_protocol_order() -> N
 
     assert result == FinalAnswer("工具执行完成。")
     messages = completions.calls[0]["messages"]
-    assert messages[1] == {
+    assert messages[0] == {"role": "system", "content": SYSTEM_INSTRUCTION}
+    assert messages[1] == {"role": "user", "content": "请计算 1 + 1。"}
+    assert messages[2] == {
         "role": "assistant",
         "content": None,
         "tool_calls": [
@@ -211,7 +227,7 @@ def test_deepseek_provider_sends_internal_tool_exchange_in_protocol_order() -> N
             }
         ],
     }
-    assert messages[2] == {
+    assert messages[3] == {
         "role": "tool",
         "tool_call_id": "call-1",
         "content": (

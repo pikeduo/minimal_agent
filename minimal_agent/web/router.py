@@ -26,6 +26,7 @@ from ..storage import (
     User,
     UserRepository,
 )
+from .markdown import render_markdown
 
 
 _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
@@ -53,6 +54,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
 
     router = APIRouter()
     templates = Jinja2Templates(directory=str(template_directory))
+    templates.env.filters["markdown"] = render_markdown
 
     @router.get("/register", response_class=HTMLResponse)
     def register_page(request: Request) -> Response:

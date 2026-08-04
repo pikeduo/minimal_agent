@@ -117,6 +117,15 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .message { margin: .75rem 0; padding: .9rem 1rem; border-radius: .95rem; }
 .message h2 { margin: 0 0 .38rem; color: #59627a; font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; }
 .message p { margin: 0; white-space: pre-wrap; line-height: 1.63; }
+.markdown-content { line-height: 1.63; }
+.markdown-content > :first-child { margin-top: 0; }
+.markdown-content > :last-child { margin-bottom: 0; }
+.markdown-content p, .markdown-content ul, .markdown-content ol, .markdown-content pre { margin: .7rem 0; }
+.markdown-content ul, .markdown-content ol { padding-left: 1.35rem; }
+.markdown-content li + li { margin-top: .3rem; }
+.markdown-content code { padding: .08rem .32rem; border-radius: .3rem; background: #edf0f7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.markdown-content pre { overflow-x: auto; padding: .8rem; border-radius: .6rem; background: #182033; color: #e6ebff; }
+.markdown-content pre code { padding: 0; background: transparent; color: inherit; }
 .message-user { margin-left: 9%; background: linear-gradient(135deg, #e2e9ff, #d8f0ff); }
 .message-assistant { margin-right: 9%; border: 1px solid #e3e7f1; background: #fff; }
 .composer-panel { margin-top: 1.3rem; }

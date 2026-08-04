@@ -2,7 +2,11 @@
   {% for message in messages %}
     <article class="message message-{{ message.role.value }}">
       <h2>{% if message.role.value == 'user' %}你{% elif message.role.value == 'assistant' %}助手{% else %}{{ message.role.value }}{% endif %}</h2>
-      <p>{{ message.content }}</p>
+      {% if message.role.value == 'assistant' %}
+        <div class="message-content markdown-content">{{ message.content | markdown }}</div>
+      {% else %}
+        <p>{{ message.content }}</p>
+      {% endif %}
     </article>
   {% else %}
     <p class="empty-state">发送一条消息以开始对话。</p>
