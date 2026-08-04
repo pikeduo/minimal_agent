@@ -108,10 +108,13 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert settings.status_code == 200
     assert 'type="password"' in settings.text
     assert 'id="browser-api-key-input"' in settings.text
+    assert f'data-current-user-id="{current_user_id(client)}"' in settings.text
     assert "不会由网页写入 <code>.env</code>" in settings.text
     assert 'src="/static/site.js"' in settings.text
     assert script.status_code == 200
-    assert "minimal-agent.deepseek-api-key" in script.text
+    assert "minimal-agent.deepseek-api-key:" in script.text
+    assert "storageKeyForCurrentUser" in script.text
+    assert "currentUserId" in script.text
     assert "X-DeepSeek-API-Key" in script.text
     assert "submitChatWithBrowserKey" in script.text
     assert '"HX-Request": "true"' in script.text

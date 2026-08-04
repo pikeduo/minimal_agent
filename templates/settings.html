@@ -17,7 +17,7 @@
       </div>
       <span id="browser-key-badge" class="status-badge" aria-live="polite">未保存</span>
     </div>
-    <p class="panel-description">保存后，聊天请求会临时使用该 Key 调用 DeepSeek。</p>
+    <p class="panel-description">保存后，当前账号的聊天请求会临时使用该 Key 调用 DeepSeek；切换账号不会读取此 Key。</p>
     <label for="browser-api-key-input">DeepSeek API Key</label>
     <div class="key-input-row">
       <input
@@ -34,7 +34,7 @@
       <button id="browser-key-clear" class="button-secondary" type="button">清除浏览器密钥</button>
       <p id="browser-key-status" class="run-status" aria-live="polite"></p>
     </div>
-    <p id="browser-key-note" class="security-note">密钥仅保存在当前浏览器的本地缓存，不会由网页写入 <code>.env</code>，也不会存入 SQLite、Trace 或页面内容。清除浏览器数据或点击上方按钮即可移除。</p>
+    <p id="browser-key-note" class="security-note">密钥仅保存在当前账号对应的浏览器本地缓存，不会由网页写入 <code>.env</code>，也不会存入 SQLite、Trace 或页面内容。清除浏览器数据或点击上方按钮即可移除。旧版未绑定账号的缓存不会自动迁移。</p>
   </section>
 
   <section class="panel">

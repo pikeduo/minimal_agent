@@ -1,10 +1,19 @@
 (() => {
   "use strict";
 
-  const storageKey = "minimal-agent.deepseek-api-key";
+  const storageKeyPrefix = "minimal-agent.deepseek-api-key:";
   const maxKeyLength = 512;
 
+  function storageKeyForCurrentUser() {
+    const userId = document.body.dataset.currentUserId || "";
+    return userId ? `${storageKeyPrefix}${userId}` : null;
+  }
+
   function readKey() {
+    const storageKey = storageKeyForCurrentUser();
+    if (!storageKey) {
+      return "";
+    }
     try {
       return window.localStorage.getItem(storageKey) || "";
     } catch (_) {
@@ -62,18 +71,28 @@
         return;
       }
       try {
+        const storageKey = storageKeyForCurrentUser();
+        if (!storageKey) {
+          updateKeyState("当前账号状态无效，请重新登录后再保存密钥。");
+          return;
+        }
         window.localStorage.setItem(storageKey, key);
         input.value = "";
-        updateKeyState("已保存在当前浏览器；密钥不会显示在页面中。");
+        updateKeyState("已保存在当前账号的浏览器缓存中；密钥不会显示在页面中。");
       } catch (_) {
         updateKeyState("浏览器拒绝保存本地缓存，请检查隐私设置。");
       }
     });
     clear.addEventListener("click", () => {
       try {
+        const storageKey = storageKeyForCurrentUser();
+        if (!storageKey) {
+          updateKeyState("当前账号状态无效，请重新登录后再清除密钥。");
+          return;
+        }
         window.localStorage.removeItem(storageKey);
         input.value = "";
-        updateKeyState("已清除当前浏览器缓存的密钥。");
+        updateKeyState("已清除当前账号的浏览器缓存密钥。");
       } catch (_) {
         updateKeyState("浏览器拒绝修改本地缓存，请检查隐私设置。");
       }
