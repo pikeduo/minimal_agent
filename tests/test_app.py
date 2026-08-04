@@ -42,3 +42,26 @@ def test_settings_use_safe_defaults_when_api_key_is_missing() -> None:
     assert settings.max_agent_steps == 8
     assert settings.max_context_messages == 24
     assert settings.context_keep_recent == 12
+
+
+def test_settings_reject_invalid_context_bounds_and_keeps_explicit_model() -> None:
+    configured = load_settings(
+        {
+            "OPENAI_MODEL": "deepseek-v4-flash",
+            "MAX_CONTEXT_MESSAGES": "3",
+            "CONTEXT_KEEP_RECENT": "2",
+        }
+    )
+
+    assert configured.openai_model == "deepseek-v4-flash"
+    assert configured.max_context_messages == 3
+    assert configured.context_keep_recent == 2
+
+    try:
+        load_settings(
+            {"MAX_CONTEXT_MESSAGES": "2", "CONTEXT_KEEP_RECENT": "3"}
+        )
+    except ValueError as exc:
+        assert "CONTEXT_KEEP_RECENT" in str(exc)
+    else:
+        raise AssertionError("配置边界无效时必须拒绝加载")

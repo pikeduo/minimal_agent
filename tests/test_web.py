@@ -160,3 +160,67 @@ def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> No
     assert response.status_code == 200
     assert "模型服务尚未配置，请设置 OPENAI_API_KEY。" in response.text
     assert "Traceback" not in response.text
+
+
+def test_message_validation_does_not_consume_provider_and_normal_form_redirects(tmp_path) -> None:
+    provider = ScriptedLLMProvider((FinalAnswer("已保存消息。"),))
+    client = TestClient(create_app(make_settings(tmp_path), provider=provider))
+    session_id = create_session(client, "普通表单")
+
+    invalid = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "   "},
+        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+    )
+    submitted = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "请保存这条消息。"},
+        headers={"X-User-ID": "user-a"},
+        follow_redirects=False,
+    )
+    page = client.get(
+        f"/sessions/{session_id}",
+        headers={"X-User-ID": "user-a"},
+    )
+
+    assert invalid.status_code == 422
+    assert "消息不能为空且不能过长。" in invalid.text
+    assert provider.remaining_responses == 0
+    assert submitted.status_code == 303
+    assert submitted.headers["location"] == f"/sessions/{session_id}"
+    assert "请保存这条消息。" in page.text
+    assert "已保存消息。" in page.text
+
+
+def test_web_rejects_invalid_identity_session_and_cross_session_todo(tmp_path) -> None:
+    client = make_client(tmp_path, ())
+    first_session_id = create_session(client, "第一个窗口")
+    second_session_id = create_session(client, "第二个窗口")
+    client.post(
+        f"/sessions/{first_session_id}/todos",
+        data={"title": "仅属于第一个窗口"},
+        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+    )
+    todo_id = client.app.state.services.todo_repository.list_for_session(
+        user_id="user-a",
+        session_id=first_session_id,
+    )[0].todo_id
+
+    invalid_identity = client.get("/", headers={"X-User-ID": "invalid user id"})
+    invalid_session = client.get(
+        "/sessions/not-a-uuid",
+        headers={"X-User-ID": "user-a"},
+    )
+    cross_session_todo = client.post(
+        f"/sessions/{second_session_id}/todos/{todo_id}/complete",
+        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+    )
+
+    assert invalid_identity.status_code == 400
+    assert invalid_session.status_code == 404
+    assert cross_session_todo.status_code == 404
+    remaining = client.app.state.services.todo_repository.list_for_session(
+        user_id="user-a",
+        session_id=first_session_id,
+    )
+    assert remaining[0].status.value == "open"
