@@ -40,7 +40,7 @@ class _MissingApiKeyProvider:
     def complete(self, request: LLMRequest) -> ProviderError:
         return ProviderError(
             kind=ProviderErrorKind.AUTHENTICATION,
-            safe_message="模型服务尚未配置，请设置 OPENAI_API_KEY。",
+            safe_message="未配置 DeepSeek API Key。",
             retryable=False,
         )
 

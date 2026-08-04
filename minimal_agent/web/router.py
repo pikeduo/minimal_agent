@@ -17,6 +17,7 @@ from ..auth import hash_password, new_session_token, verify_password
 from ..config import Settings
 from ..context import ConversationService
 from ..errors import DomainValidationError, ResourceNotFoundError
+from ..models import ProviderErrorKind
 from ..providers.base import LLMProvider
 from ..storage import (
     AuthSessionRepository,
@@ -283,6 +284,9 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "todo_oob": True,
                 "run_status": _run_status(result.runtime_result),
                 "error_message": _runtime_error_message(result.runtime_result),
+                "error_settings_url": _runtime_error_settings_url(
+                    result.runtime_result
+                ),
             },
         )
 
@@ -550,3 +554,12 @@ def _runtime_error_message(runtime_result: Any) -> str | None:
     if runtime_result.provider_error is None:
         return None
     return runtime_result.provider_error.safe_message
+
+
+def _runtime_error_settings_url(runtime_result: Any) -> str | None:
+    """认证配置相关错误提供设置入口，不暴露环境变量名称。"""
+
+    provider_error = runtime_result.provider_error
+    if provider_error is None or provider_error.kind is not ProviderErrorKind.AUTHENTICATION:
+        return None
+    return "/settings"

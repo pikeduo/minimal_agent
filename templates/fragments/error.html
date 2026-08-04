@@ -1,1 +1,6 @@
-<p class="error-message" role="alert">{{ error_message }}</p>
+<p class="error-message" role="alert">
+  {{ error_message }}
+  {% if error_settings_url %}
+    <a href="{{ error_settings_url }}">点击前往设置 <strong>DeepSeek API Key</strong></a>
+  {% endif %}
+</p>

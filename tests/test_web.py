@@ -384,7 +384,10 @@ def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> No
     )
 
     assert response.status_code == 200
-    assert "模型服务尚未配置，请设置 OPENAI_API_KEY。" in response.text
+    assert "未配置 DeepSeek API Key。" in response.text
+    assert 'href="/settings"' in response.text
+    assert "点击前往设置 <strong>DeepSeek API Key</strong>" in response.text
+    assert "OPENAI_API_KEY" not in response.text
     assert "Traceback" not in response.text
 
 
