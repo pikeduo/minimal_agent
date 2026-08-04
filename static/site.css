@@ -120,9 +120,14 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .markdown-content { line-height: 1.63; }
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
-.markdown-content p, .markdown-content ul, .markdown-content ol, .markdown-content pre { margin: .7rem 0; }
+.markdown-content p, .markdown-content ul, .markdown-content ol, .markdown-content pre, .markdown-table-wrap { margin: .7rem 0; }
 .markdown-content ul, .markdown-content ol { padding-left: 1.35rem; }
 .markdown-content li + li { margin-top: .3rem; }
+.markdown-table-wrap { overflow-x: auto; border: 1px solid #e1e6f4; border-radius: .65rem; }
+.markdown-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+.markdown-table th, .markdown-table td { padding: .6rem .7rem; border-bottom: 1px solid #e8ecf6; text-align: left; white-space: nowrap; }
+.markdown-table th { color: #3d4868; background: #f3f6ff; font-weight: 800; }
+.markdown-table tbody tr:last-child td { border-bottom: 0; }
 .markdown-content code { padding: .08rem .32rem; border-radius: .3rem; background: #edf0f7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .markdown-content pre { overflow-x: auto; padding: .8rem; border-radius: .6rem; background: #182033; color: #e6ebff; }
 .markdown-content pre code { padding: 0; background: transparent; color: inherit; }

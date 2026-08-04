@@ -21,3 +21,21 @@ def test_markdown_escapes_html_before_formatting() -> None:
     assert "<script>" not in rendered
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
     assert "<strong>安全文本</strong>" in rendered
+
+
+def test_markdown_renders_github_style_table_with_safe_inline_content() -> None:
+    rendered = str(
+        render_markdown(
+            "| 项目 | 信息 |\n"
+            "|------|------|\n"
+            "| **日期** | 2025-01-01 |\n"
+            "| 天气 | 晴 ☀️ |\n"
+            "| 温度 | <script>28℃</script> |"
+        )
+    )
+
+    assert '<div class="markdown-table-wrap"><table class="markdown-table">' in rendered
+    assert "<th>项目</th><th>信息</th>" in rendered
+    assert "<td><strong>日期</strong></td><td>2025-01-01</td>" in rendered
+    assert "<script>" not in rendered
+    assert "&lt;script&gt;28℃&lt;/script&gt;" in rendered
