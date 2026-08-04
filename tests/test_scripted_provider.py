@@ -104,6 +104,7 @@ def test_request_copies_schemas_and_serializes_internal_models() -> None:
         "tool_schemas": [
             {"name": "weather", "parameters": {"type": "object"}}
         ],
+        "tool_results": [],
     }
 
 

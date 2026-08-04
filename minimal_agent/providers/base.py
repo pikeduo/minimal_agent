@@ -7,7 +7,14 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Union
 
 from ..errors import DomainValidationError
-from ..models import FinalAnswer, LLMResponse, Message, ProviderError, ToolCallBatch
+from ..models import (
+    FinalAnswer,
+    LLMResponse,
+    Message,
+    ProviderError,
+    ToolCallBatch,
+    ToolResult,
+)
 
 
 def _require_text(value: str, *, name: str) -> None:
@@ -32,6 +39,7 @@ class LLMRequest:
     model: str
     messages: tuple[Message, ...]
     tool_schemas: tuple[Mapping[str, Any], ...] = ()
+    tool_results: tuple[ToolResult, ...] = ()
 
     def __post_init__(self) -> None:
         _require_text(self.model, name="model")
@@ -44,6 +52,8 @@ class LLMRequest:
             for schema in self.tool_schemas
         )
         object.__setattr__(self, "tool_schemas", copied_schemas)
+        if not all(isinstance(result, ToolResult) for result in self.tool_results):
+            raise DomainValidationError("tool_results 只能包含 ToolResult")
 
     def to_dict(self) -> dict[str, Any]:
         """生成可供 Provider Adapter 使用的内部数据副本。"""
@@ -52,6 +62,7 @@ class LLMRequest:
             "model": self.model,
             "messages": [message.to_dict() for message in self.messages],
             "tool_schemas": [dict(schema) for schema in self.tool_schemas],
+            "tool_results": [result.to_dict() for result in self.tool_results],
         }
 
 
