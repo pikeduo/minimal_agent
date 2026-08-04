@@ -144,6 +144,32 @@ class SessionRepository(_OwnershipRepository):
             for row in rows
         )
 
+    def delete(self, *, user_id: str, session_id: str) -> None:
+        """删除当前用户的会话及其关联消息、工具结果、摘要和待办。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            for table_name in (
+                "messages",
+                "tool_results",
+                "session_summaries",
+                "todos",
+            ):
+                connection.execute(
+                    f"DELETE FROM {table_name} WHERE user_id = ? AND session_id = ?",
+                    (user_id, session_id),
+                )
+            connection.execute(
+                "DELETE FROM sessions WHERE id = ? AND user_id = ?",
+                (session_id, user_id),
+            )
+
 
 class MessageRepository(_OwnershipRepository):
     """追加并读取属于当前用户和 Session 的消息。"""

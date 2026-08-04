@@ -25,8 +25,17 @@
     <ul id="session-list" class="session-list">
       {% for session in sessions %}
         <li class="session-item">
-          <a href="/sessions/{{ session.session_id }}">{{ session.title }}</a>
-          <small>{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+          <div>
+            <a href="/sessions/{{ session.session_id }}">{{ session.title }}</a>
+            <small>{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+          </div>
+          <form
+            action="/sessions/{{ session.session_id }}/delete"
+            method="post"
+            onsubmit="return confirm('确定删除此会话及其全部消息、待办和工具记录吗？此操作不可恢复。')"
+          >
+            <button class="button-danger" type="submit">删除</button>
+          </form>
         </li>
       {% else %}
         <li class="empty-state">尚无会话。</li>

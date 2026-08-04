@@ -59,6 +59,8 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert "工作计划" in home.text
     assert "第二个窗口" in home.text
     assert f"/sessions/{session_id}" in home.text
+    assert f"/sessions/{session_id}/delete" in home.text
+    assert "确定删除此会话" in home.text
     assert chat.status_code == 200
     assert 'hx-post="/sessions/' in chat.text
     assert 'id="chat-panel"' in chat.text
@@ -225,6 +227,40 @@ def test_cross_user_session_routes_return_not_found(tmp_path) -> None:
     assert todo.status_code == 404
     assert message.status_code == 404
     assert "私有窗口" not in page.text
+
+
+def test_delete_session_removes_related_data_and_rejects_cross_user(tmp_path) -> None:
+    client = make_client(tmp_path, (FinalAnswer("已保存。"),))
+    session_id = create_session(client, "待删除会话")
+    client.post(
+        f"/sessions/{session_id}/todos",
+        data={"title": "会话内待办"},
+        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+    )
+    client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "会话内消息"},
+        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+    )
+
+    denied = client.post(
+        f"/sessions/{session_id}/delete",
+        headers={"X-User-ID": "user-b"},
+    )
+    deleted = client.post(
+        f"/sessions/{session_id}/delete",
+        headers={"X-User-ID": "user-a"},
+        follow_redirects=False,
+    )
+    home = client.get("/", headers={"X-User-ID": "user-a"})
+    removed = client.get(f"/sessions/{session_id}", headers={"X-User-ID": "user-a"})
+
+    assert denied.status_code == 404
+    assert deleted.status_code == 303
+    assert deleted.headers["location"] == "/"
+    assert "待删除会话" not in home.text
+    assert removed.status_code == 404
+    assert client.app.state.services.session_repository.list_for_user(user_id="user-a") == ()
 
 
 def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> None:

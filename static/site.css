@@ -97,9 +97,11 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .inline-form button, .key-input-row button { flex: 0 0 auto; white-space: nowrap; }
 
 .session-list, .todo-list { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
-.session-item { padding: .85rem .95rem; border: 1px solid #e3e7f3; border-radius: .8rem; background: linear-gradient(110deg, #fbfcff, #f5f7ff); }
+.session-item { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem .95rem; border: 1px solid #e3e7f3; border-radius: .8rem; background: linear-gradient(110deg, #fbfcff, #f5f7ff); }
 .session-item a { font-weight: 750; text-decoration: none; }
 .session-list small { display: block; margin-top: .28rem; color: #7b849b; font-size: .82rem; }
+.button-danger { padding: .45rem .65rem; color: #b42343; background: #fff0f3; box-shadow: none; font-size: .82rem; }
+.button-danger:hover { color: #fff; background: #cb2d4f; box-shadow: none; }
 
 .message { margin: .75rem 0; padding: .9rem 1rem; border-radius: .95rem; }
 .message h2 { margin: 0 0 .38rem; color: #59627a; font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; }
@@ -136,6 +138,7 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
   .inline-form, .key-input-row, .composer-footer, .key-actions { align-items: stretch; flex-direction: column; }
   .inline-form button, .key-input-row button { width: 100%; }
   .message-user, .message-assistant { margin-right: 0; margin-left: 0; }
+  .session-item { align-items: flex-start; }
   .settings-list { grid-template-columns: 1fr; gap: .25rem; }
   .settings-list dd { margin-bottom: .55rem; }
 }

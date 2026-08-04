@@ -76,6 +76,19 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         )
         return RedirectResponse(url=f"/sessions/{session.session_id}", status_code=303)
 
+    @router.post("/sessions/{session_id}/delete")
+    def delete_session(request: Request, session_id: str) -> RedirectResponse:
+        """删除当前用户拥有的会话，并回到会话首页。"""
+
+        user_id = _current_user(request)
+        _owned_session_or_404(
+            services.session_repository,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        services.session_repository.delete(user_id=user_id, session_id=session_id)
+        return RedirectResponse(url="/", status_code=303)
+
     @router.get("/sessions/{session_id}", response_class=HTMLResponse)
     def chat_page(request: Request, session_id: str) -> HTMLResponse:
         user_id = _current_user(request)
