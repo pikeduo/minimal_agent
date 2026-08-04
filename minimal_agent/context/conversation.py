@@ -77,6 +77,41 @@ class ConversationService:
             created_at=_utc_now(),
         )
         self._message_repository.append(user_message)
+        return self._run_existing_user_message(
+            user_message=user_message,
+            provider_override=provider_override,
+        )
+
+    def retry(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        message_id: str,
+        provider_override: LLMProvider | None = None,
+    ) -> ConversationResult:
+        """不重复写入用户消息，重新执行此前失败的请求。"""
+
+        user_message = self._message_repository.get_user_message(
+            user_id=user_id,
+            session_id=session_id,
+            message_id=message_id,
+        )
+        return self._run_existing_user_message(
+            user_message=user_message,
+            provider_override=provider_override,
+        )
+
+    def _run_existing_user_message(
+        self,
+        *,
+        user_message: Message,
+        provider_override: LLMProvider | None,
+    ) -> ConversationResult:
+        """以已持久化的用户消息构建上下文并保存本次运行结果。"""
+
+        user_id = user_message.user_id
+        session_id = user_message.session_id
         context = self._context_builder.build(user_id=user_id, session_id=session_id)
         runtime_result = self._runtime.run(
             user_id=user_id,

@@ -450,6 +450,44 @@ class MessageRepository(_OwnershipRepository):
             for row in rows
         )
 
+    def get_user_message(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        message_id: str,
+    ) -> Message:
+        """读取当前会话中的一条用户消息，供失败后安全重试。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        _require_text(message_id, name="message_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            row = connection.execute(
+                """
+                SELECT id, user_id, session_id, role, content, created_at, run_id
+                FROM messages
+                WHERE id = ? AND user_id = ? AND session_id = ? AND role = ?
+                """,
+                (message_id, user_id, session_id, MessageRole.USER.value),
+            ).fetchone()
+        if row is None:
+            raise ResourceNotFoundError("未找到可重新发送的用户消息。")
+        return Message(
+            message_id=row["id"],
+            user_id=row["user_id"],
+            session_id=row["session_id"],
+            role=MessageRole(row["role"]),
+            content=row["content"],
+            created_at=_parse_timestamp(row["created_at"]),
+            run_id=row["run_id"],
+        )
+
 
 class TodoRepository(_OwnershipRepository):
     """以用户和 Session 双重边界持久化 Todo。"""

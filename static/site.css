@@ -141,6 +141,9 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .empty-state { color: #7b849b; }
 .run-status { margin: .6rem 0 0; color: #495571; }
 .error-message { color: #bd2c46; font-weight: 700; }
+.error-message p { margin: 0; }
+.error-message form { margin: .65rem 0 0; }
+.retry-button { padding: .45rem .65rem; font-size: .82rem; }
 
 .settings-list { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: .7rem 1.25rem; }
 .settings-list dt { color: #556079; font-weight: 750; }

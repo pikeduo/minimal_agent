@@ -114,14 +114,15 @@
     );
   }
 
-  function isChatForm(form) {
-    return form instanceof HTMLFormElement && /\/sessions\/[^/]+\/messages$/.test(form.action);
+  function isChatRequestForm(form) {
+    return form instanceof HTMLFormElement
+      && /\/sessions\/[^/]+\/messages(?:\/[^/]+\/retry)?$/.test(form.action);
   }
 
   async function submitChatWithBrowserKey(event) {
     const form = event.target;
     const key = readKey();
-    if (!isChatForm(form) || !key) {
+    if (!isChatRequestForm(form) || !key) {
       return;
     }
     event.preventDefault();
@@ -179,7 +180,7 @@
   document.body.addEventListener("htmx:configRequest", (event) => {
     const path = event.detail.path || event.detail.elt?.getAttribute("hx-post") || "";
     const key = readKey();
-    if (key && /\/sessions\/[^/]+\/messages$/.test(path)) {
+    if (key && /\/sessions\/[^/]+\/messages(?:\/[^/]+\/retry)?$/.test(path)) {
       event.detail.headers ||= {};
       event.detail.headers["X-DeepSeek-API-Key"] = key;
     }

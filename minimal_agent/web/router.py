@@ -287,6 +287,67 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "error_settings_url": _runtime_error_settings_url(
                     result.runtime_result
                 ),
+                "retry_action_url": _retry_action_url(
+                    session_id=session_id,
+                    message_id=result.user_message.message_id,
+                    runtime_result=result.runtime_result,
+                ),
+            },
+        )
+
+    @router.post("/sessions/{session_id}/messages/{message_id}/retry")
+    def retry_message(
+        request: Request,
+        session_id: str,
+        message_id: str,
+    ) -> Response:
+        """使用原始用户消息重试失败的模型请求，不重复保存用户输入。"""
+
+        user_id = _require_current_user(request, services).user_id
+        browser_api_key = _browser_api_key(request)
+        try:
+            result = services.conversation_service.retry(
+                user_id=user_id,
+                session_id=session_id,
+                message_id=message_id,
+                provider_override=(
+                    services.browser_key_provider_factory(browser_api_key)
+                    if browser_api_key is not None
+                    else None
+                ),
+            )
+        except ResourceNotFoundError:
+            raise HTTPException(status_code=404, detail="未找到可重新发送的消息。") from None
+
+        if not _is_htmx(request):
+            return RedirectResponse(url=f"/sessions/{session_id}", status_code=303)
+
+        messages = services.message_repository.list_for_session(
+            user_id=user_id,
+            session_id=session_id,
+        )
+        todos = services.todo_repository.list_for_session(
+            user_id=user_id,
+            session_id=session_id,
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="fragments/chat_update.html",
+            context={
+                "messages": messages,
+                "todos": todos,
+                "session_id": session_id,
+                "todo_oob": True,
+                "run_status": _run_status(result.runtime_result),
+                "error_message": _runtime_error_message(result.runtime_result),
+                "error_settings_url": _runtime_error_settings_url(
+                    result.runtime_result
+                ),
+                "retry_action_url": _retry_action_url(
+                    session_id=session_id,
+                    message_id=message_id,
+                    runtime_result=result.runtime_result,
+                ),
             },
         )
 
@@ -563,3 +624,16 @@ def _runtime_error_settings_url(runtime_result: Any) -> str | None:
     if provider_error is None or provider_error.kind is not ProviderErrorKind.AUTHENTICATION:
         return None
     return "/settings"
+
+
+def _retry_action_url(
+    *,
+    session_id: str,
+    message_id: str,
+    runtime_result: Any,
+) -> str | None:
+    """仅在模型运行失败时，为对应的用户消息提供一次重试入口。"""
+
+    if runtime_result.provider_error is None:
+        return None
+    return f"/sessions/{session_id}/messages/{message_id}/retry"

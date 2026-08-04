@@ -1,6 +1,19 @@
-<p class="error-message" role="alert">
-  {{ error_message }}
-  {% if error_settings_url %}
-    <a href="{{ error_settings_url }}">点击前往设置 <strong>DeepSeek API Key</strong></a>
+<div class="error-message" role="alert">
+  <p>
+    {{ error_message }}
+    {% if error_settings_url %}
+      <a href="{{ error_settings_url }}">点击前往设置 <strong>DeepSeek API Key</strong></a>
+    {% endif %}
+  </p>
+  {% if retry_action_url %}
+    <form
+      action="{{ retry_action_url }}"
+      method="post"
+      hx-post="{{ retry_action_url }}"
+      hx-target="#chat-panel"
+      hx-swap="outerHTML"
+    >
+      <button class="retry-button" type="submit">重新发送</button>
+    </form>
   {% endif %}
-</p>
+</div>

@@ -387,8 +387,55 @@ def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> No
     assert "未配置 DeepSeek API Key。" in response.text
     assert 'href="/settings"' in response.text
     assert "点击前往设置 <strong>DeepSeek API Key</strong>" in response.text
+    assert f'action="/sessions/{session_id}/messages/' in response.text
+    assert "重新发送" in response.text
     assert "OPENAI_API_KEY" not in response.text
     assert "Traceback" not in response.text
+
+
+def test_retry_failed_message_uses_browser_key_without_duplicate_user_message(tmp_path) -> None:
+    retry_provider = ScriptedLLMProvider((FinalAnswer("配置密钥后已成功回复。"),))
+    received_keys: list[str] = []
+
+    def create_browser_provider(api_key: str) -> ScriptedLLMProvider:
+        received_keys.append(api_key)
+        return retry_provider
+
+    client = TestClient(
+        create_app(
+            replace(make_settings(tmp_path), openai_api_key=None),
+            browser_key_provider_factory=create_browser_provider,
+        )
+    )
+    register_user(client, "user-a")
+    session_id = create_session(client)
+    failed = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "请重新发送这条消息。"},
+        headers={"HX-Request": "true"},
+    )
+    user_message_id = client.app.state.services.message_repository.list_for_session(
+        user_id=current_user_id(client),
+        session_id=session_id,
+    )[0].message_id
+    retried = client.post(
+        f"/sessions/{session_id}/messages/{user_message_id}/retry",
+        headers={"HX-Request": "true", "X-DeepSeek-API-Key": "user-a-key"},
+    )
+    messages = client.app.state.services.message_repository.list_for_session(
+        user_id=current_user_id(client),
+        session_id=session_id,
+    )
+
+    assert failed.status_code == 200
+    assert retried.status_code == 200
+    assert received_keys == ["user-a-key"]
+    assert [message.role.value for message in messages] == ["user", "assistant"]
+    assert [message.content for message in messages] == [
+        "请重新发送这条消息。",
+        "配置密钥后已成功回复。",
+    ]
+    assert "配置密钥后已成功回复。" in retried.text
 
 
 def test_message_validation_does_not_consume_provider_and_normal_form_redirects(tmp_path) -> None:
