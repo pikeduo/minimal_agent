@@ -25,7 +25,7 @@
         <li class="session-item">
           <div>
             <a href="/sessions/{{ session.session_id }}">{{ session.title }}</a>
-            <small>{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            <small>{{ session.created_at | beijing_time }}</small>
           </div>
           <form
             action="/sessions/{{ session.session_id }}/delete"

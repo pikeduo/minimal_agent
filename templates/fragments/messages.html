@@ -4,16 +4,17 @@
       <h2>{% if message.role.value == 'user' %}你{% elif message.role.value == 'assistant' %}助手{% else %}{{ message.role.value }}{% endif %}</h2>
       {% if message.role.value == 'assistant' %}
         <div class="message-content markdown-content">{{ message.content | markdown }}</div>
+        {% set message_tool_results = tool_results_by_run.get(message.run_id, ()) if message.run_id else () %}
+        {% if message_tool_results %}
+          <p class="message-tool-status">已完成工具调用：{% for tool_result in message_tool_results %}<code>{{ tool_result.tool_name }}</code>{% if tool_result.status.value == 'error' %}（失败）{% endif %}{% if not loop.last %}、{% endif %}{% endfor %}</p>
+        {% endif %}
         <button
           class="copy-markdown-button"
           type="button"
           data-markdown="{{ message.content | tojson | forceescape }}"
           aria-label="复制原始 Markdown 回复"
-        >复制 Markdown</button>
-        {% set message_tool_results = tool_results_by_run.get(message.run_id, ()) if message.run_id else () %}
-        {% if message_tool_results %}
-          <p class="message-tool-status">已完成工具调用：{% for tool_result in message_tool_results %}<code>{{ tool_result.tool_name }}</code>{% if tool_result.status.value == 'error' %}（失败）{% endif %}{% if not loop.last %}、{% endif %}{% endfor %}</p>
-        {% endif %}
+          title="复制 Markdown"
+        ><svg class="copy-markdown-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7.5V5.8A1.8 1.8 0 0 1 9.8 4h7.4A1.8 1.8 0 0 1 19 5.8v9.4a1.8 1.8 0 0 1-1.8 1.8h-1.7M6.8 8h7.4A1.8 1.8 0 0 1 16 9.8v8.4a1.8 1.8 0 0 1-1.8 1.8H6.8A1.8 1.8 0 0 1 5 18.2V9.8A1.8 1.8 0 0 1 6.8 8Z"/></svg></button>
       {% else %}
         <p>{{ message.content }}</p>
       {% endif %}

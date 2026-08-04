@@ -162,15 +162,22 @@
       if (typeof markdown !== "string") {
         return;
       }
-      const originalText = button.textContent;
+      const originalLabel = button.getAttribute("aria-label") || "复制原始 Markdown 回复";
+      const originalTitle = button.getAttribute("title") || "复制 Markdown";
       try {
         await copyText(markdown);
-        button.textContent = "已复制 Markdown";
+        button.dataset.copyState = "success";
+        button.setAttribute("aria-label", "已复制 Markdown 回复");
+        button.setAttribute("title", "已复制 Markdown");
       } catch (_) {
-        button.textContent = "复制失败，请手动复制";
+        button.dataset.copyState = "error";
+        button.setAttribute("aria-label", "复制失败，请手动复制");
+        button.setAttribute("title", "复制失败，请手动复制");
       }
       window.setTimeout(() => {
-        button.textContent = originalText;
+        delete button.dataset.copyState;
+        button.setAttribute("aria-label", originalLabel);
+        button.setAttribute("title", originalTitle);
       }, 1800);
     });
   }

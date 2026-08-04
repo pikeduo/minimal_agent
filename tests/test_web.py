@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import sqlite3
 
 from fastapi.testclient import TestClient
 
@@ -83,7 +84,7 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert home.status_code == 200
     assert "新会话" in home.text
     assert 'name="title"' not in home.text
-    assert 'href="/static/site.css?v=20260804-3"' in home.text
+    assert 'href="/static/site.css?v=20260804-4"' in home.text
     assert f"/sessions/{session_id}" in home.text
     assert f"/sessions/{session_id}/delete" in home.text
     assert "确定删除此会话" in home.text
@@ -101,6 +102,20 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert settings.status_code == 200
     assert "deepseek-v4-flash" in settings.text
     assert "test-secret-that-must-not-be-rendered" not in settings.text
+
+
+def test_session_created_time_is_rendered_in_beijing_time(tmp_path) -> None:
+    client = make_client(tmp_path, ())
+    session_id = create_session(client)
+    with sqlite3.connect(client.app.state.settings.database_path) as connection:
+        connection.execute(
+            "UPDATE sessions SET created_at = ?, updated_at = ? WHERE id = ?",
+            ("2026-08-04T00:05:00+00:00", "2026-08-04T00:05:00+00:00", session_id),
+        )
+
+    home = client.get("/")
+
+    assert "2026-08-04 08:05" in home.text
 
 
 def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
@@ -289,10 +304,14 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert "计算结果为 <strong>5</strong>。" in response.text
     assert "<li>已完成计算</li>" in response.text
     assert "data-markdown=" in response.text
-    assert "复制 Markdown" in response.text
+    assert 'class="copy-markdown-icon"' in response.text
+    assert 'title="复制 Markdown"' in response.text
     assert "**5**" in response.text
     assert "已完成工具调用：calculator" in response.text
     assert "已完成工具调用：<code>calculator</code>" in response.text
+    assert response.text.index("已完成工具调用：<code>calculator</code>") < response.text.index(
+        'class="copy-markdown-button"'
+    )
     assert 'hx-swap-oob="true"' in response.text
     assert "2 + 3&quot;" not in response.text
 

@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -34,6 +35,7 @@ _USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
 _MAX_MESSAGE_LENGTH = 4_000
 _MAX_TODO_TITLE_LENGTH = 200
 _AUTH_COOKIE_NAME = "minimal_agent_session"
+_BEIJING_TIME_ZONE = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass(frozen=True)
@@ -57,6 +59,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
     router = APIRouter()
     templates = Jinja2Templates(directory=str(template_directory))
     templates.env.filters["markdown"] = render_markdown
+    templates.env.filters["beijing_time"] = format_beijing_time
 
     @router.get("/register", response_class=HTMLResponse)
     def register_page(request: Request) -> Response:
@@ -472,6 +475,14 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         return {"status": "ok"}
 
     return router
+
+
+def format_beijing_time(value: datetime) -> str:
+    """将带时区的存储时间转换为页面展示用的北京时间。"""
+
+    if not isinstance(value, datetime) or value.tzinfo is None:
+        raise ValueError("时间必须是包含时区信息的 datetime")
+    return value.astimezone(_BEIJING_TIME_ZONE).strftime("%Y-%m-%d %H:%M")
 
 
 def _current_user(request: Request, services: WebServices) -> User | None:
