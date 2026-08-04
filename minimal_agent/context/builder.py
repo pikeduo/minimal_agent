@@ -17,6 +17,7 @@ class SessionContext:
     messages: tuple[Message, ...]
     tool_results: tuple[ToolResult, ...]
     summary: str | None = None
+    compressed: bool = False
 
 
 class ContextBuilder:
@@ -78,4 +79,7 @@ class ContextBuilder:
             summary=compression_result.summary.content
             if compression_result is not None and compression_result.summary is not None
             else None,
+            compressed=compression_result.compressed
+            if compression_result is not None
+            else False,
         )

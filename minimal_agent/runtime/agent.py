@@ -18,6 +18,7 @@ from ..models import (
     ToolResult,
 )
 from ..providers.base import LLMProvider, LLMRequest, ProviderResult
+from ..tracing import JsonlTraceRecorder
 from ..tools.base import TodoService, ToolExecutionContext
 from ..tools.registry import ToolRegistry
 
@@ -51,6 +52,7 @@ class AgentRuntime:
         model: str,
         max_steps: int,
         todo_service: TodoService | None = None,
+        trace_recorder: JsonlTraceRecorder | None = None,
     ) -> None:
         if not callable(getattr(provider, "complete", None)):
             raise DomainValidationError("provider 必须提供 complete 方法")
@@ -60,12 +62,17 @@ class AgentRuntime:
             raise DomainValidationError("model 必须是非空字符串")
         if not isinstance(max_steps, int) or isinstance(max_steps, bool) or max_steps <= 0:
             raise DomainValidationError("max_steps 必须是正整数")
+        if trace_recorder is not None and not isinstance(
+            trace_recorder, JsonlTraceRecorder
+        ):
+            raise DomainValidationError("trace_recorder 必须是 JsonlTraceRecorder 或 None")
 
         self._provider = provider
         self._tool_registry = tool_registry
         self._model = model
         self._max_steps = max_steps
         self._todo_service = todo_service
+        self._trace_recorder = trace_recorder
 
     def run(
         self,
@@ -76,6 +83,7 @@ class AgentRuntime:
         run_id: str | None = None,
         historical_tool_results: tuple[ToolResult, ...] = (),
         session_summary: str | None = None,
+        context_compressed: bool = False,
     ) -> RuntimeResult:
         """运行 Provider—工具循环，直到最终回答、上限或安全失败。"""
 
@@ -86,11 +94,34 @@ class AgentRuntime:
             not isinstance(session_summary, str) or not session_summary.strip()
         ):
             raise DomainValidationError("session_summary 必须是非空字符串或 None")
+        if not isinstance(context_compressed, bool):
+            raise DomainValidationError("context_compressed 必须是布尔值")
         active_run = AgentRun(
             run_id=run_id or str(uuid4()),
             user_id=user_id,
             session_id=session_id,
         ).start()
+        self._trace(
+            event="run.started",
+            run=active_run,
+            data={"model": self._model, "max_steps": self._max_steps},
+        )
+        self._trace(
+            event="session.loaded",
+            run=active_run,
+            data={"user_id": user_id, "session_id": session_id},
+        )
+        self._trace(
+            event="context.built",
+            run=active_run,
+            data={
+                "message_count": len(messages),
+                "historical_tool_result_count": len(historical_tool_results),
+                "has_summary": session_summary is not None,
+            },
+        )
+        if context_compressed:
+            self._trace(event="context.compressed", run=active_run, data={})
         tool_results: list[ToolResult] = []
         tool_call_batches: list[ToolCallBatch] = []
         tool_context = ToolExecutionContext(
@@ -109,30 +140,114 @@ class AgentRuntime:
                 tool_call_batches=tuple(tool_call_batches),
                 session_summary=session_summary,
             )
+            self._trace(
+                event="llm.requested",
+                run=active_run,
+                data={
+                    "step": active_run.step,
+                    "message_count": len(request.messages),
+                    "tool_names": [
+                        schema["name"]
+                        for schema in request.tool_schemas
+                        if isinstance(schema.get("name"), str)
+                    ],
+                    "tool_result_count": len(request.tool_results),
+                },
+            )
             response = self._complete_safely(request)
 
             if isinstance(response, ProviderError):
+                self._trace(
+                    event="llm.responded",
+                    run=active_run,
+                    data={"response_type": "provider_error", "error_kind": response.kind.value},
+                )
+                failed_run = active_run.finish(RunStatus.FAILED)
+                self._trace(
+                    event="run.failed",
+                    run=failed_run,
+                    data={"error_kind": response.kind.value, "retryable": response.retryable},
+                )
                 return RuntimeResult(
-                    run=active_run.finish(RunStatus.FAILED),
+                    run=failed_run,
                     final_answer=None,
                     provider_error=response,
                     tool_results=tuple(tool_results),
                 )
             if isinstance(response, FinalAnswer):
+                self._trace(
+                    event="llm.responded",
+                    run=active_run,
+                    data={
+                        "response_type": "final_answer",
+                        "has_decision_summary": response.decision_summary is not None,
+                    },
+                )
+                completed_run = active_run.finish(RunStatus.COMPLETED)
+                self._trace(
+                    event="run.completed",
+                    run=completed_run,
+                    data={"answer_length": len(response.content)},
+                )
                 return RuntimeResult(
-                    run=active_run.finish(RunStatus.COMPLETED),
+                    run=completed_run,
                     final_answer=response,
                     provider_error=None,
                     tool_results=tuple(tool_results),
                 )
             if isinstance(response, ToolCallBatch):
+                self._trace(
+                    event="llm.responded",
+                    run=active_run,
+                    data={
+                        "response_type": "tool_call_batch",
+                        "tool_call_count": len(response.calls),
+                        "has_decision_summary": response.decision_summary is not None,
+                    },
+                )
                 tool_call_batches.append(response)
                 for call in response.calls:
-                    tool_results.append(self._tool_registry.execute(call, tool_context))
+                    self._trace(
+                        event="tool.started",
+                        run=active_run,
+                        data={"tool_call_id": call.tool_call_id, "tool_name": call.name},
+                    )
+                    tool_result = self._tool_registry.execute(call, tool_context)
+                    tool_results.append(tool_result)
+                    if tool_result.status.value == "success":
+                        self._trace(
+                            event="tool.succeeded",
+                            run=active_run,
+                            data={
+                                "tool_call_id": tool_result.tool_call_id,
+                                "tool_name": tool_result.tool_name,
+                            },
+                        )
+                    else:
+                        self._trace(
+                            event="tool.failed",
+                            run=active_run,
+                            data={
+                                "tool_call_id": tool_result.tool_call_id,
+                                "tool_name": tool_result.tool_name,
+                                "error_code": tool_result.error_code,
+                            },
+                        )
                 continue
 
+            failed_run = active_run.finish(RunStatus.FAILED)
+            self._trace(
+                event="llm.responded",
+                run=active_run,
+                data={"response_type": "unsupported"},
+            )
+            self._trace(
+                event="run.failed",
+                run=failed_run,
+                data={"error_kind": ProviderErrorKind.INVALID_RESPONSE.value},
+            )
             return RuntimeResult(
-                run=active_run.finish(RunStatus.FAILED),
+                run=failed_run,
                 final_answer=None,
                 provider_error=ProviderError(
                     kind=ProviderErrorKind.INVALID_RESPONSE,
@@ -142,8 +257,14 @@ class AgentRuntime:
                 tool_results=tuple(tool_results),
             )
 
+        max_steps_run = active_run.finish(RunStatus.MAX_STEPS)
+        self._trace(
+            event="run.failed",
+            run=max_steps_run,
+            data={"reason": "max_steps"},
+        )
         return RuntimeResult(
-            run=active_run.finish(RunStatus.MAX_STEPS),
+            run=max_steps_run,
             final_answer=None,
             provider_error=None,
             tool_results=tuple(tool_results),
@@ -158,6 +279,12 @@ class AgentRuntime:
                 safe_message="模型服务调用失败。",
                 retryable=True,
             )
+
+    def _trace(self, *, event: str, run: AgentRun, data: dict[str, Any]) -> None:
+        """向可选的本地 Trace 写入最小化元数据。"""
+
+        if self._trace_recorder is not None:
+            self._trace_recorder.emit(event=event, run_id=run.run_id, data=data)
 
     @staticmethod
     def _validate_messages(
