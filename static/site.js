@@ -100,11 +100,41 @@
   }
 
   function initializeEmptySessionCleanup() {
-    const leaveForm = document.querySelector("[data-empty-session-leave-url]");
-    const leaveUrl = leaveForm?.dataset.emptySessionLeaveUrl;
+    const leaveElement = document.querySelector("[data-empty-session-leave-url]");
+    const leaveUrl = leaveElement?.dataset.emptySessionLeaveUrl;
     if (!leaveUrl || !navigator.sendBeacon) {
       return;
     }
+    document.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+      const link = event.target.closest("a[href]");
+      if (
+        !(link instanceof HTMLAnchorElement)
+        || event.defaultPrevented
+        || event.button !== 0
+        || event.metaKey
+        || event.ctrlKey
+        || event.shiftKey
+        || event.altKey
+        || link.target
+        || link.download
+      ) {
+        return;
+      }
+      const destination = new URL(link.href, window.location.href);
+      if (
+        destination.origin !== window.location.origin
+        || destination.href === window.location.href
+      ) {
+        return;
+      }
+      event.preventDefault();
+      window.fetch(leaveUrl, { method: "POST", credentials: "same-origin" })
+        .catch(() => undefined)
+        .finally(() => window.location.assign(destination.href));
+    });
     window.addEventListener(
       "pagehide",
       () => {

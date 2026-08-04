@@ -94,6 +94,10 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert 'id="browser-key-chat-status"' in chat.text
     assert f'action="/sessions/{session_id}/leave"' in chat.text
     assert f'data-empty-session-leave-url="/sessions/{session_id}/leave"' in chat.text
+    assert (
+        f'class="brand"\n          href="/"\n          data-empty-session-leave-url="/sessions/{session_id}/leave"'
+        in chat.text
+    )
     assert settings.status_code == 200
     assert "deepseek-v4-flash" in settings.text
     assert "test-secret-that-must-not-be-rendered" not in settings.text
@@ -120,6 +124,8 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert '"HX-Request": "true"' in script.text
     assert "initializeEmptySessionCleanup" in script.text
     assert "navigator.sendBeacon" in script.text
+    assert "window.fetch(leaveUrl" in script.text
+    assert "window.location.assign(destination.href)" in script.text
 
 
 def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> None:

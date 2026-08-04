@@ -232,6 +232,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                     if retry_message is not None
                     else None
                 ),
+                "empty_session_leave_url": f"/sessions/{session_id}/leave",
                 "current_user": user,
             },
         )

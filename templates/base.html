@@ -11,7 +11,11 @@
   <body{% if current_user %} data-current-user-id="{{ current_user.user_id }}"{% endif %}>
     <main class="page-shell">
       <nav class="top-nav" aria-label="主导航">
-        <a class="brand" href="/">Minimal Agent</a>
+        <a
+          class="brand"
+          href="/"
+          {% if empty_session_leave_url %}data-empty-session-leave-url="{{ empty_session_leave_url }}"{% endif %}
+        >Minimal Agent</a>
         <div class="nav-links">
           {% if current_user %}
             <span class="current-user">{{ current_user.username }}</span>
