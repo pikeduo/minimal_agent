@@ -204,6 +204,10 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
             user_id=user_id,
             session_id=session_id,
         )
+        retry_message = services.message_repository.get_latest_unanswered_user_message(
+            user_id=user_id,
+            session_id=session_id,
+        )
         todos = services.todo_repository.list_for_session(
             user_id=user_id,
             session_id=session_id,
@@ -217,7 +221,17 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "messages": messages,
                 "todos": todos,
                 "run_status": None,
-                "error_message": None,
+                "error_message": (
+                    "上一条消息尚未获得回复，可重新发送。"
+                    if retry_message is not None
+                    else None
+                ),
+                "error_settings_url": None,
+                "retry_action_url": (
+                    f"/sessions/{session_id}/messages/{retry_message.message_id}/retry"
+                    if retry_message is not None
+                    else None
+                ),
                 "current_user": user,
             },
         )
@@ -287,10 +301,10 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "error_settings_url": _runtime_error_settings_url(
                     result.runtime_result
                 ),
-                "retry_action_url": _retry_action_url(
-                    session_id=session_id,
-                    message_id=result.user_message.message_id,
-                    runtime_result=result.runtime_result,
+                "retry_action_url": (
+                    f"/sessions/{session_id}/messages/{result.user_message.message_id}/retry"
+                    if result.runtime_result.provider_error is not None
+                    else None
                 ),
             },
         )
@@ -343,10 +357,10 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "error_settings_url": _runtime_error_settings_url(
                     result.runtime_result
                 ),
-                "retry_action_url": _retry_action_url(
-                    session_id=session_id,
-                    message_id=message_id,
-                    runtime_result=result.runtime_result,
+                "retry_action_url": (
+                    f"/sessions/{session_id}/messages/{message_id}/retry"
+                    if result.runtime_result.provider_error is not None
+                    else None
                 ),
             },
         )
@@ -624,16 +638,3 @@ def _runtime_error_settings_url(runtime_result: Any) -> str | None:
     if provider_error is None or provider_error.kind is not ProviderErrorKind.AUTHENTICATION:
         return None
     return "/settings"
-
-
-def _retry_action_url(
-    *,
-    session_id: str,
-    message_id: str,
-    runtime_result: Any,
-) -> str | None:
-    """仅在模型运行失败时，为对应的用户消息提供一次重试入口。"""
-
-    if runtime_result.provider_error is None:
-        return None
-    return f"/sessions/{session_id}/messages/{message_id}/retry"

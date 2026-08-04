@@ -488,6 +488,44 @@ class MessageRepository(_OwnershipRepository):
             run_id=row["run_id"],
         )
 
+    def get_latest_unanswered_user_message(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+    ) -> Message | None:
+        """返回最后一条尚未得到助手回复的用户消息。"""
+
+        _require_text(user_id, name="user_id")
+        _require_text(session_id, name="session_id")
+        with self._database.connection() as connection:
+            self._require_owned_session(
+                connection,
+                user_id=user_id,
+                session_id=session_id,
+            )
+            row = connection.execute(
+                """
+                SELECT id, user_id, session_id, role, content, created_at, run_id
+                FROM messages
+                WHERE user_id = ? AND session_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """,
+                (user_id, session_id),
+            ).fetchone()
+        if row is None or row["role"] != MessageRole.USER.value:
+            return None
+        return Message(
+            message_id=row["id"],
+            user_id=row["user_id"],
+            session_id=row["session_id"],
+            role=MessageRole(row["role"]),
+            content=row["content"],
+            created_at=_parse_timestamp(row["created_at"]),
+            run_id=row["run_id"],
+        )
+
 
 class TodoRepository(_OwnershipRepository):
     """以用户和 Session 双重边界持久化 Todo。"""

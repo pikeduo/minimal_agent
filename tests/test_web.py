@@ -418,6 +418,7 @@ def test_retry_failed_message_uses_browser_key_without_duplicate_user_message(tm
         user_id=current_user_id(client),
         session_id=session_id,
     )[0].message_id
+    reloaded = client.get(f"/sessions/{session_id}")
     retried = client.post(
         f"/sessions/{session_id}/messages/{user_message_id}/retry",
         headers={"HX-Request": "true", "X-DeepSeek-API-Key": "user-a-key"},
@@ -428,6 +429,12 @@ def test_retry_failed_message_uses_browser_key_without_duplicate_user_message(tm
     )
 
     assert failed.status_code == 200
+    assert reloaded.status_code == 200
+    assert "上一条消息尚未获得回复，可重新发送。" in reloaded.text
+    assert (
+        f'action="/sessions/{session_id}/messages/{user_message_id}/retry"'
+        in reloaded.text
+    )
     assert retried.status_code == 200
     assert received_keys == ["user-a-key"]
     assert [message.role.value for message in messages] == ["user", "assistant"]
