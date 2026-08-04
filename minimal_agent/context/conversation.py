@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from ..errors import DomainValidationError
 from ..models import Message, MessageRole
+from ..providers.base import LLMProvider
 from ..runtime import AgentRuntime, RuntimeResult
 from ..storage import MessageRepository, ToolResultRepository
 from .builder import ContextBuilder, SessionContext
@@ -60,6 +61,7 @@ class ConversationService:
         user_id: str,
         session_id: str,
         content: str,
+        provider_override: LLMProvider | None = None,
     ) -> ConversationResult:
         """保存用户输入、构建 Context、运行 Agent 并保存可见结果。"""
 
@@ -83,6 +85,7 @@ class ConversationService:
             historical_tool_results=context.tool_results,
             session_summary=context.summary,
             context_compressed=context.compressed,
+            provider_override=provider_override,
         )
         self._tool_result_repository.append_for_run(
             user_id=user_id,

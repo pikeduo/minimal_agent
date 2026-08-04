@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -45,11 +46,16 @@ def create_app(
     settings: Settings | None = None,
     *,
     provider: LLMProvider | None = None,
+    browser_key_provider_factory: Callable[[str], LLMProvider] | None = None,
 ) -> FastAPI:
     """创建包含本地 Runtime、Session、Todo 和 Web 路由的应用。"""
 
     app_settings = settings or load_settings()
-    services = _build_services(app_settings, provider=provider)
+    services = _build_services(
+        app_settings,
+        provider=provider,
+        browser_key_provider_factory=browser_key_provider_factory,
+    )
     app = FastAPI(title="Minimal Agent", version="0.1.0")
     app.state.settings = app_settings
     app.state.services = services
@@ -62,7 +68,12 @@ def create_app(
     return app
 
 
-def _build_services(settings: Settings, *, provider: LLMProvider | None) -> WebServices:
+def _build_services(
+    settings: Settings,
+    *,
+    provider: LLMProvider | None,
+    browser_key_provider_factory: Callable[[str], LLMProvider] | None,
+) -> WebServices:
     """组装单进程演示所需的本地依赖，不在 LLM 调用期间持有数据库连接。"""
 
     database = SQLiteDatabase(settings.database_path)
@@ -112,6 +123,15 @@ def _build_services(settings: Settings, *, provider: LLMProvider | None) -> WebS
         message_repository=messages,
         todo_repository=todos,
         settings=settings,
+        browser_key_provider_factory=(
+            browser_key_provider_factory
+            or (
+                lambda api_key: DeepSeekProvider(
+                    api_key=api_key,
+                    base_url=settings.deepseek_base_url,
+                )
+            )
+        ),
     )
 
 

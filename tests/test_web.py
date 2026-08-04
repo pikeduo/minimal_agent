@@ -67,6 +67,83 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert "test-secret-that-must-not-be-rendered" not in settings.text
 
 
+def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
+    client = make_client(tmp_path, ())
+
+    settings = client.get("/settings", headers={"X-User-ID": "user-a"})
+    script = client.get("/static/site.js")
+
+    assert settings.status_code == 200
+    assert 'type="password"' in settings.text
+    assert 'id="browser-api-key-input"' in settings.text
+    assert "不会由网页写入 <code>.env</code>" in settings.text
+    assert script.status_code == 200
+    assert "minimal-agent.deepseek-api-key" in script.text
+    assert "X-DeepSeek-API-Key" in script.text
+
+
+def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_path) -> None:
+    browser_key = "browser-key-that-must-not-be-persisted"
+    received_keys: list[str] = []
+    browser_provider = ScriptedLLMProvider((FinalAnswer("浏览器密钥已用于本次请求。"),))
+
+    def create_browser_provider(api_key: str) -> ScriptedLLMProvider:
+        received_keys.append(api_key)
+        return browser_provider
+
+    client = TestClient(
+        create_app(
+            make_settings(tmp_path),
+            provider=ScriptedLLMProvider(()),
+            browser_key_provider_factory=create_browser_provider,
+        )
+    )
+    session_id = create_session(client, "浏览器密钥窗口")
+
+    response = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "使用浏览器密钥回答。"},
+        headers={
+            "X-User-ID": "user-a",
+            "HX-Request": "true",
+            "X-DeepSeek-API-Key": browser_key,
+        },
+    )
+
+    stored_messages = client.app.state.services.message_repository.list_for_session(
+        user_id="user-a",
+        session_id=session_id,
+    )
+    trace_content = (tmp_path / "agent-trace.jsonl").read_text(encoding="utf-8")
+
+    assert response.status_code == 200
+    assert received_keys == [browser_key]
+    assert "浏览器密钥已用于本次请求。" in response.text
+    assert browser_key not in response.text
+    assert browser_key not in trace_content
+    assert all(browser_key not in message.content for message in stored_messages)
+
+
+def test_invalid_browser_key_header_is_rejected_without_leaking_value(tmp_path) -> None:
+    client = make_client(tmp_path, ())
+    session_id = create_session(client, "密钥校验窗口")
+    invalid_key = "a" * 513
+
+    response = client.post(
+        f"/sessions/{session_id}/messages",
+        data={"content": "你好"},
+        headers={
+            "X-User-ID": "user-a",
+            "HX-Request": "true",
+            "X-DeepSeek-API-Key": invalid_key,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "浏览器密钥格式无效。" in response.text
+    assert invalid_key not in response.text
+
+
 def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_path) -> None:
     client = make_client(
         tmp_path,

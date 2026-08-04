@@ -3,9 +3,10 @@
 {% block title %}会话｜Minimal Agent{% endblock %}
 
 {% block content %}
-  <header>
+  <header class="page-header">
+    <p class="eyebrow">工作区</p>
     <h1>会话</h1>
-    <p>当前开发身份：{{ user_id }}</p>
+    <p>创建独立的对话空间，让上下文、工具结果和待办各自保持清晰。</p>
   </header>
 
   <section class="panel" aria-labelledby="new-session-title">
@@ -14,7 +15,7 @@
       <label for="session-title">会话标题</label>
       <div class="inline-form">
         <input id="session-title" name="title" maxlength="100" value="新会话" required>
-        <button type="submit">创建</button>
+        <button type="submit">创建会话</button>
       </div>
     </form>
   </section>
@@ -23,7 +24,7 @@
     <h2 id="session-list-title">我的会话</h2>
     <ul id="session-list" class="session-list">
       {% for session in sessions %}
-        <li>
+        <li class="session-item">
           <a href="/sessions/{{ session.session_id }}">{{ session.title }}</a>
           <small>{{ session.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
         </li>

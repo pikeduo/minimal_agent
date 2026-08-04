@@ -9,11 +9,15 @@
   </head>
   <body>
     <main class="page-shell">
-      <nav aria-label="主导航">
-        <a href="/">会话</a>
-        <a href="/settings">设置</a>
+      <nav class="top-nav" aria-label="主导航">
+        <a class="brand" href="/">Minimal Agent</a>
+        <div class="nav-links">
+          <a href="/">会话</a>
+          <a href="/settings">设置</a>
+        </div>
       </nav>
       {% block content %}{% endblock %}
     </main>
+    <script src="/static/site.js" defer></script>
   </body>
 </html>

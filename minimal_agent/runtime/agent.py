@@ -84,6 +84,7 @@ class AgentRuntime:
         historical_tool_results: tuple[ToolResult, ...] = (),
         session_summary: str | None = None,
         context_compressed: bool = False,
+        provider_override: LLMProvider | None = None,
     ) -> RuntimeResult:
         """运行 Provider—工具循环，直到最终回答、上限或安全失败。"""
 
@@ -96,6 +97,13 @@ class AgentRuntime:
             raise DomainValidationError("session_summary 必须是非空字符串或 None")
         if not isinstance(context_compressed, bool):
             raise DomainValidationError("context_compressed 必须是布尔值")
+        if provider_override is not None and not callable(
+            getattr(provider_override, "complete", None)
+        ):
+            raise DomainValidationError("provider_override 必须提供 complete 方法或 None")
+        active_provider = (
+            provider_override if provider_override is not None else self._provider
+        )
         active_run = AgentRun(
             run_id=run_id or str(uuid4()),
             user_id=user_id,
@@ -154,7 +162,10 @@ class AgentRuntime:
                     "tool_result_count": len(request.tool_results),
                 },
             )
-            response = self._complete_safely(request)
+            response = self._complete_safely(
+                request,
+                provider=active_provider,
+            )
 
             if isinstance(response, ProviderError):
                 self._trace(
@@ -270,9 +281,14 @@ class AgentRuntime:
             tool_results=tuple(tool_results),
         )
 
-    def _complete_safely(self, request: LLMRequest) -> ProviderResult:
+    @staticmethod
+    def _complete_safely(
+        request: LLMRequest,
+        *,
+        provider: LLMProvider,
+    ) -> ProviderResult:
         try:
-            return self._provider.complete(request)
+            return provider.complete(request)
         except Exception:
             return ProviderError(
                 kind=ProviderErrorKind.UNKNOWN,

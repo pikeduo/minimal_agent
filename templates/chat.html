@@ -3,16 +3,17 @@
 {% block title %}{{ session.title }}｜Minimal Agent{% endblock %}
 
 {% block content %}
-  <header>
-    <p><a href="/">← 返回会话列表</a></p>
+  <header class="page-header chat-page-header">
+    <p><a class="back-link" href="/">← 返回会话列表</a></p>
+    <p class="eyebrow">对话空间</p>
     <h1>{{ session.title }}</h1>
-    <p>会话 ID：<code>{{ session.session_id }}</code></p>
+    <p>可使用受控工具，也可在设置中管理浏览器密钥。</p>
   </header>
 
   {% include "fragments/chat_panel.html" %}
 
   <form
-    class="panel"
+    class="panel composer-panel"
     action="/sessions/{{ session.session_id }}/messages"
     method="post"
     hx-post="/sessions/{{ session.session_id }}/messages"
@@ -21,7 +22,10 @@
   >
     <label for="message-content">消息</label>
     <textarea id="message-content" name="content" rows="4" maxlength="4000" required></textarea>
-    <button type="submit">发送</button>
+    <div class="composer-footer">
+      <span>Enter 换行，点击发送开始运行</span>
+      <button type="submit">发送消息</button>
+    </div>
   </form>
 
   {% include "fragments/todos.html" %}

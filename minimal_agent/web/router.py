@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from ..config import Settings
 from ..context import ConversationService
 from ..errors import DomainValidationError, ResourceNotFoundError
+from ..providers.base import LLMProvider
 from ..storage import MessageRepository, SessionRepository, TodoRepository
 
 
@@ -33,6 +34,7 @@ class WebServices:
     message_repository: MessageRepository
     todo_repository: TodoRepository
     settings: Settings
+    browser_key_provider_factory: Callable[[str], LLMProvider]
 
 
 def create_router(template_directory: Path, services: WebServices) -> APIRouter:
@@ -123,11 +125,17 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         if cleaned_content is None:
             return _validation_error(request, templates, "消息不能为空且不能过长。")
 
+        browser_api_key = _browser_api_key(request)
         try:
             result = services.conversation_service.respond(
                 user_id=user_id,
                 session_id=session_id,
                 content=cleaned_content,
+                provider_override=(
+                    services.browser_key_provider_factory(browser_api_key)
+                    if browser_api_key is not None
+                    else None
+                ),
             )
         except ResourceNotFoundError:
             raise HTTPException(status_code=404, detail="未找到会话。") from None
@@ -283,6 +291,18 @@ def _is_htmx(request: Request) -> bool:
     """判断请求是否要求 HTML 局部片段。"""
 
     return request.headers.get("HX-Request", "").lower() == "true"
+
+
+def _browser_api_key(request: Request) -> str | None:
+    """读取浏览器暂存的密钥，但绝不将其写入 Trace、数据库或响应。"""
+
+    api_key = request.headers.get("X-DeepSeek-API-Key")
+    if api_key is None:
+        return None
+    cleaned_key = api_key.strip()
+    if not cleaned_key or len(cleaned_key) > 512:
+        raise HTTPException(status_code=422, detail="浏览器密钥格式无效。")
+    return cleaned_key
 
 
 def _validation_error(

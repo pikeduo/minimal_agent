@@ -3,8 +3,47 @@
 {% block title %}设置｜Minimal Agent{% endblock %}
 
 {% block content %}
-  <h1>设置</h1>
+  <header class="page-header">
+    <p class="eyebrow">模型连接</p>
+    <h1>设置</h1>
+    <p>管理本地运行参数与当前浏览器的 DeepSeek 访问凭据。</p>
+  </header>
+
+  <section class="panel key-panel" aria-labelledby="browser-key-title">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">推荐</p>
+        <h2 id="browser-key-title">浏览器密钥</h2>
+      </div>
+      <span id="browser-key-badge" class="status-badge" aria-live="polite">未保存</span>
+    </div>
+    <p class="panel-description">保存后，聊天请求会临时使用该 Key 调用 DeepSeek。</p>
+    <label for="browser-api-key-input">DeepSeek API Key</label>
+    <div class="key-input-row">
+      <input
+        id="browser-api-key-input"
+        type="password"
+        maxlength="512"
+        autocomplete="new-password"
+        placeholder="sk-..."
+        aria-describedby="browser-key-note browser-key-status"
+      >
+      <button id="browser-key-save" type="button">保存到此浏览器</button>
+    </div>
+    <div class="key-actions">
+      <button id="browser-key-clear" class="button-secondary" type="button">清除浏览器密钥</button>
+      <p id="browser-key-status" class="run-status" aria-live="polite"></p>
+    </div>
+    <p id="browser-key-note" class="security-note">密钥仅保存在当前浏览器的本地缓存，不会由网页写入 <code>.env</code>，也不会存入 SQLite、Trace 或页面内容。清除浏览器数据或点击上方按钮即可移除。</p>
+  </section>
+
   <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">服务端</p>
+        <h2>运行配置</h2>
+      </div>
+    </div>
     <dl class="settings-list">
       <dt>模型</dt><dd>{{ model }}</dd>
       <dt>最大 Agent 步数</dt><dd>{{ max_agent_steps }}</dd>
@@ -12,6 +51,6 @@
       <dt>Context 原文保留数</dt><dd>{{ context_keep_recent }}</dd>
       <dt>模型服务密钥</dt><dd>{% if api_key_configured %}已配置{% else %}未配置{% endif %}</dd>
     </dl>
-    <p>页面不会显示 API Key、Authorization、原始模型响应或完整推理内容。</p>
+    <p class="security-note">页面不会显示 API Key、Authorization、原始模型响应或完整推理内容。</p>
   </section>
 {% endblock %}

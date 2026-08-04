@@ -30,7 +30,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 
 `OPENAI_API_KEY` 是 OpenAI-compatible SDK 使用的变量名，在这里填写 DeepSeek Key。`.env`、数据库和 Trace 日志仅保留在本机，不应提交到 Git。
 
-未配置 Key 也可以启动页面、创建会话和管理 Todo；发送聊天消息时会显示安全的配置提示，不会发起网络请求。
+未配置 Key 也可以启动页面、创建会话和管理 Todo；发送聊天消息时会显示安全的配置提示，不会发起网络请求。也可在“设置”页把 Key 保存到当前浏览器的本地缓存：它仅随聊天请求临时发送，不会由页面写入 `.env`、SQLite 或 Trace；需要移除时可在同一页面清除。
 
 ### 3. 启动应用
 
@@ -45,7 +45,7 @@ python -m uvicorn minimal_agent.app:create_app --factory --host 127.0.0.1 --port
 - **会话**：每个会话都有独立 URL，可在多个浏览器标签页分别打开和继续对话。
 - **聊天**：消息通过 HTMX 局部更新；页面只显示用户消息、最终回答和简化工具状态。
 - **Todo**：可在当前会话中新增和完成待办，不会出现在其他会话。
-- **设置**：显示模型与运行限制，不显示 API Key。
+- **设置**：显示模型与运行限制；可选择将 DeepSeek Key 保存在当前浏览器缓存，页面不会回显密钥。
 
 当前身份机制仅用于本地开发：默认用户为 `demo-user`。服务端始终以 `user_id + session_id` 校验 Session 和 Todo 所有权；生产部署前应接入真实认证。
 
