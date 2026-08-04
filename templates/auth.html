@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{% if mode == "login" %}登录{% else %}注册{% endif %}｜Minimal Agent{% endblock %}
+
+{% block content %}
+  <section class="auth-card panel" aria-labelledby="auth-title">
+    <p class="eyebrow">本地账户</p>
+    <h1 id="auth-title">{% if mode == "login" %}欢迎回来{% else %}创建账户{% endif %}</h1>
+    <p class="panel-description">
+      {% if mode == "login" %}
+        登录后才能访问自己的会话、消息和待办。
+      {% else %}
+        账户信息仅保存在当前本地 SQLite 数据库中。
+      {% endif %}
+    </p>
+    {% if error_message %}
+      <p class="error-message" role="alert">{{ error_message }}</p>
+    {% endif %}
+    <form action="/{% if mode == "login" %}login{% else %}register{% endif %}" method="post">
+      <label for="username">用户名</label>
+      <input id="username" name="username" value="{{ username }}" minlength="3" maxlength="32" autocomplete="username" required>
+      <p class="field-hint">3 到 32 位，只能使用字母、数字、下划线或连字符。</p>
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" minlength="8" maxlength="128" autocomplete="{% if mode == "login" %}current-password{% else %}new-password{% endif %}" required>
+      <button type="submit">{% if mode == "login" %}登录{% else %}注册并登录{% endif %}</button>
+    </form>
+    <p class="auth-switch">
+      {% if mode == "login" %}
+        还没有账户？<a href="/register">去注册</a>
+      {% else %}
+        已有账户？<a href="/login">去登录</a>
+      {% endif %}
+    </p>
+  </section>
+{% endblock %}

@@ -54,6 +54,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .nav-links { display: flex; gap: .25rem; }
 .nav-links a { padding: .45rem .65rem; border-radius: .55rem; color: #4c5676; font-size: .94rem; text-decoration: none; }
 .nav-links a:hover { background: #eef0ff; color: #303ab6; }
+.current-user { align-self: center; padding: .45rem .25rem; color: #59627a; font-size: .84rem; font-weight: 700; }
+.nav-links form { margin: 0; }
+.logout-button { padding: .45rem .65rem; color: #59627a; background: #edf0f7; box-shadow: none; font-size: .84rem; }
+.logout-button:hover { background: #e3e7f3; box-shadow: none; }
 
 .page-header { max-width: 45rem; margin: 0 0 1.75rem; }
 .page-header h1 { margin: .18rem 0 .5rem; font-size: clamp(2rem, 5vw, 3.25rem); letter-spacing: -.055em; line-height: 1.02; }
@@ -72,6 +76,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 .panel h2 { margin: 0 0 1rem; font-size: 1.05rem; letter-spacing: -.015em; }
+.auth-card { max-width: 31rem; margin: 7vh auto; }
+.auth-card h1 { margin: .18rem 0 .5rem; font-size: clamp(2rem, 5vw, 2.7rem); letter-spacing: -.05em; }
+.field-hint { margin: -.4rem 0 1rem; color: #7b849b; font-size: .8rem; }
+.auth-switch { margin: 1.25rem 0 0; color: #66718e; font-size: .9rem; }
 .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .panel-heading h2 { margin: .2rem 0 0; }
 .panel-description, .security-note { color: #66718e; font-size: .92rem; line-height: 1.65; }

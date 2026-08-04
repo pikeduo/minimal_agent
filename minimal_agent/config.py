@@ -22,6 +22,8 @@ class Settings:
     database_path: str
     trace_path: str
     server_log_path: str
+    auth_session_days: int
+    auth_cookie_secure: bool
     max_agent_steps: int
     max_context_messages: int
     context_keep_recent: int
@@ -37,6 +39,17 @@ def _positive_int(value: str | None, *, name: str, default: int) -> int:
     if parsed <= 0:
         raise ValueError(f"{name} 必须是正整数")
     return parsed
+
+
+def _boolean(value: str | None, *, name: str, default: bool) -> bool:
+    if value is None or value == "":
+        return default
+    normalized_value = value.strip().lower()
+    if normalized_value in {"1", "true", "yes"}:
+        return True
+    if normalized_value in {"0", "false", "no"}:
+        return False
+    raise ValueError(f"{name} 必须是 true 或 false")
 
 
 def load_settings(environment: Mapping[str, str] | None = None) -> Settings:
@@ -69,6 +82,16 @@ def load_settings(environment: Mapping[str, str] | None = None) -> Settings:
         database_path=environment.get("DATABASE_PATH", "data/minimal_agent.sqlite3"),
         trace_path=environment.get("TRACE_PATH", "logs/agent-trace.jsonl"),
         server_log_path=environment.get("SERVER_LOG_PATH", "logs/server.log"),
+        auth_session_days=_positive_int(
+            environment.get("AUTH_SESSION_DAYS"),
+            name="AUTH_SESSION_DAYS",
+            default=7,
+        ),
+        auth_cookie_secure=_boolean(
+            environment.get("AUTH_COOKIE_SECURE"),
+            name="AUTH_COOKIE_SECURE",
+            default=False,
+        ),
         max_agent_steps=_positive_int(
             environment.get("MAX_AGENT_STEPS"),
             name="MAX_AGENT_STEPS",

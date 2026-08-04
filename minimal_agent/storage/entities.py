@@ -9,6 +9,23 @@ from enum import Enum
 from ..errors import DomainValidationError
 
 
+@dataclass(frozen=True)
+class User:
+    """可安全传递到 Web 层的已注册用户，不包含密码哈希。"""
+
+    user_id: str
+    username: str
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        for field_name in ("user_id", "username"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise DomainValidationError(f"{field_name} 必须是非空字符串")
+        if self.created_at.tzinfo is None or self.created_at.utcoffset() is None:
+            raise DomainValidationError("created_at 必须包含时区信息")
+
+
 class TodoStatus(str, Enum):
     """待办的可持久化状态。"""
 

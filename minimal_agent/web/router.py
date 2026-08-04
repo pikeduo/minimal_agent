@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from dataclasses import dataclass
@@ -12,17 +13,26 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from ..auth import hash_password, new_session_token, verify_password
 from ..config import Settings
 from ..context import ConversationService
 from ..errors import DomainValidationError, ResourceNotFoundError
 from ..providers.base import LLMProvider
-from ..storage import MessageRepository, SessionRepository, TodoRepository
+from ..storage import (
+    AuthSessionRepository,
+    MessageRepository,
+    SessionRepository,
+    TodoRepository,
+    User,
+    UserRepository,
+)
 
 
-_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+_USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
 _MAX_MESSAGE_LENGTH = 4_000
 _MAX_SESSION_TITLE_LENGTH = 100
 _MAX_TODO_TITLE_LENGTH = 200
+_AUTH_COOKIE_NAME = "minimal_agent_session"
 
 
 @dataclass(frozen=True)
@@ -30,6 +40,8 @@ class WebServices:
     """Web 层所需的应用服务与安全展示配置。"""
 
     conversation_service: ConversationService
+    user_repository: UserRepository
+    auth_session_repository: AuthSessionRepository
     session_repository: SessionRepository
     message_repository: MessageRepository
     todo_repository: TodoRepository
@@ -43,14 +55,101 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
     router = APIRouter()
     templates = Jinja2Templates(directory=str(template_directory))
 
+    @router.get("/register", response_class=HTMLResponse)
+    def register_page(request: Request) -> Response:
+        if _current_user(request, services) is not None:
+            return RedirectResponse(url="/", status_code=303)
+        return _auth_page(request, templates, mode="register")
+
+    @router.post("/register", response_class=HTMLResponse)
+    def register(
+        request: Request,
+        username: str = Form(...),
+        password: str = Form(...),
+    ) -> Response:
+        if _current_user(request, services) is not None:
+            return RedirectResponse(url="/", status_code=303)
+        cleaned_username = _clean_username(username)
+        if cleaned_username is None:
+            return _auth_page(
+                request,
+                templates,
+                mode="register",
+                username=username,
+                error_message="用户名只能使用 3 到 32 位字母、数字、下划线或连字符。",
+                status_code=422,
+            )
+        try:
+            password_hash = hash_password(password)
+            user = services.user_repository.create(
+                username=cleaned_username,
+                password_hash=password_hash,
+            )
+        except DomainValidationError as exc:
+            message = (
+                "用户名已被使用。"
+                if "用户名已被使用" in str(exc)
+                else "密码长度必须在 8 到 128 个字符之间。"
+            )
+            return _auth_page(
+                request,
+                templates,
+                mode="register",
+                username=cleaned_username,
+                error_message=message,
+                status_code=422,
+            )
+        return _login_response(user, services)
+
+    @router.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request) -> Response:
+        if _current_user(request, services) is not None:
+            return RedirectResponse(url="/", status_code=303)
+        return _auth_page(request, templates, mode="login")
+
+    @router.post("/login", response_class=HTMLResponse)
+    def login(
+        request: Request,
+        username: str = Form(...),
+        password: str = Form(...),
+    ) -> Response:
+        cleaned_username = _clean_username(username)
+        authentication = (
+            services.user_repository.get_authentication(username=cleaned_username)
+            if cleaned_username is not None
+            else None
+        )
+        if authentication is None or not verify_password(password, authentication[1]):
+            return _auth_page(
+                request,
+                templates,
+                mode="login",
+                username=username,
+                error_message="用户名或密码错误。",
+                status_code=401,
+            )
+        return _login_response(authentication[0], services)
+
+    @router.post("/logout")
+    def logout(request: Request) -> RedirectResponse:
+        token = request.cookies.get(_AUTH_COOKIE_NAME)
+        if token is not None:
+            services.auth_session_repository.delete(token=token)
+        response = RedirectResponse(url="/login", status_code=303)
+        response.delete_cookie(_AUTH_COOKIE_NAME, path="/")
+        return response
+
     @router.get("/", response_class=HTMLResponse)
-    def home(request: Request) -> HTMLResponse:
-        user_id = _current_user(request)
+    def home(request: Request) -> Response:
+        user = _current_user(request, services)
+        if user is None:
+            return RedirectResponse(url="/login", status_code=303)
+        user_id = user.user_id
         sessions = services.session_repository.list_for_user(user_id=user_id)
         return templates.TemplateResponse(
             request=request,
             name="sessions.html",
-            context={"sessions": sessions, "user_id": user_id},
+            context={"sessions": sessions, "current_user": user},
         )
 
     @router.post("/sessions")
@@ -58,7 +157,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         request: Request,
         title: str = Form("新会话"),
     ) -> Response:
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         cleaned_title = _clean_text(
             title,
             field_name="会话标题",
@@ -80,7 +179,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
     def delete_session(request: Request, session_id: str) -> RedirectResponse:
         """删除当前用户拥有的会话，并回到会话首页。"""
 
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -91,7 +190,8 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
 
     @router.get("/sessions/{session_id}", response_class=HTMLResponse)
     def chat_page(request: Request, session_id: str) -> HTMLResponse:
-        user_id = _current_user(request)
+        user = _require_current_user(request, services)
+        user_id = user.user_id
         session = _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -115,6 +215,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "todos": todos,
                 "run_status": None,
                 "error_message": None,
+                "current_user": user,
             },
         )
 
@@ -124,7 +225,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         session_id: str,
         content: str = Form(...),
     ) -> Response:
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -179,7 +280,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
 
     @router.get("/sessions/{session_id}/todos", response_class=HTMLResponse)
     def todo_fragment(request: Request, session_id: str) -> HTMLResponse:
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -201,7 +302,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         session_id: str,
         title: str = Form(...),
     ) -> Response:
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -227,7 +328,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
         session_id: str,
         todo_id: str,
     ) -> Response:
-        user_id = _current_user(request)
+        user_id = _require_current_user(request, services).user_id
         _owned_session_or_404(
             services.session_repository,
             user_id=user_id,
@@ -245,7 +346,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
 
     @router.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
-        _current_user(request)
+        user = _require_current_user(request, services)
         return templates.TemplateResponse(
             request=request,
             name="settings.html",
@@ -255,6 +356,7 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
                 "max_context_messages": services.settings.max_context_messages,
                 "context_keep_recent": services.settings.context_keep_recent,
                 "api_key_configured": services.settings.openai_api_key is not None,
+                "current_user": user,
             },
         )
 
@@ -265,13 +367,83 @@ def create_router(template_directory: Path, services: WebServices) -> APIRouter:
     return router
 
 
-def _current_user(request: Request) -> str:
-    """取得开发期身份上下文，路由不接受表单中的目标用户 ID。"""
+def _current_user(request: Request, services: WebServices) -> User | None:
+    """从 HttpOnly Cookie 取得当前用户，不再接受可伪造的用户请求头。"""
 
-    user_id = request.headers.get("X-User-ID", "demo-user")
-    if not _USER_ID_PATTERN.fullmatch(user_id):
-        raise HTTPException(status_code=400, detail="用户身份格式无效。")
-    return user_id
+    token = request.cookies.get(_AUTH_COOKIE_NAME)
+    if token is None:
+        return None
+    user_id = services.auth_session_repository.get_user_id(token=token)
+    if user_id is None:
+        return None
+    return services.user_repository.get(user_id=user_id)
+
+
+def _require_current_user(request: Request, services: WebServices) -> User:
+    """要求请求携带有效登录会话，否则返回统一认证失败响应。"""
+
+    user = _current_user(request, services)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录。")
+    return user
+
+
+def _clean_username(value: str) -> str | None:
+    """校验可作为登录标识的最小用户名格式。"""
+
+    if not isinstance(value, str):
+        return None
+    cleaned_value = value.strip()
+    return cleaned_value if _USERNAME_PATTERN.fullmatch(cleaned_value) else None
+
+
+def _auth_page(
+    request: Request,
+    templates: Jinja2Templates,
+    *,
+    mode: str,
+    username: str = "",
+    error_message: str | None = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    """渲染登录或注册表单，绝不回填密码。"""
+
+    return templates.TemplateResponse(
+        request=request,
+        name="auth.html",
+        context={
+            "mode": mode,
+            "username": username,
+            "error_message": error_message,
+            "current_user": None,
+        },
+        status_code=status_code,
+    )
+
+
+def _login_response(user: User, services: WebServices) -> RedirectResponse:
+    """创建服务端会话并签发仅限本浏览器读取的 Cookie。"""
+
+    token = new_session_token()
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=services.settings.auth_session_days
+    )
+    services.auth_session_repository.create(
+        user_id=user.user_id,
+        token=token,
+        expires_at=expires_at,
+    )
+    response = RedirectResponse(url="/", status_code=303)
+    response.set_cookie(
+        key=_AUTH_COOKIE_NAME,
+        value=token,
+        max_age=services.settings.auth_session_days * 24 * 60 * 60,
+        httponly=True,
+        samesite="lax",
+        secure=services.settings.auth_cookie_secure,
+        path="/",
+    )
+    return response
 
 
 def _owned_session_or_404(

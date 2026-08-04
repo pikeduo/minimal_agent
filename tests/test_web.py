@@ -20,6 +20,8 @@ def make_settings(tmp_path) -> Settings:
         database_path=str(tmp_path / "web.sqlite3"),
         trace_path=str(tmp_path / "agent-trace.jsonl"),
         server_log_path=str(tmp_path / "server.log"),
+        auth_session_days=7,
+        auth_cookie_secure=False,
         max_agent_steps=4,
         max_context_messages=12,
         context_keep_recent=6,
@@ -27,19 +29,43 @@ def make_settings(tmp_path) -> Settings:
 
 
 def make_client(tmp_path, responses: tuple[object, ...]) -> TestClient:
-    return TestClient(
+    client = TestClient(
         create_app(
             make_settings(tmp_path),
             provider=ScriptedLLMProvider(responses),
         )
     )
+    register_user(client, "user-a")
+    return client
 
 
-def create_session(client: TestClient, title: str, *, user_id: str = "user-a") -> str:
+def register_user(client: TestClient, username: str, password: str = "password-123") -> None:
+    response = client.post(
+        "/register",
+        data={"username": username, "password": password},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+
+def current_user_id(client: TestClient) -> str:
+    token = client.cookies.get("minimal_agent_session")
+    assert token is not None
+    user_id = client.app.state.services.auth_session_repository.get_user_id(token=token)
+    assert user_id is not None
+    return user_id
+
+
+def second_user_client(client: TestClient, username: str = "user-b") -> TestClient:
+    other_client = TestClient(client.app)
+    register_user(other_client, username)
+    return other_client
+
+
+def create_session(client: TestClient, title: str) -> str:
     response = client.post(
         "/sessions",
         data={"title": title},
-        headers={"X-User-ID": user_id},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -51,9 +77,9 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     session_id = create_session(client, "工作计划")
     create_session(client, "第二个窗口")
 
-    home = client.get("/", headers={"X-User-ID": "user-a"})
-    chat = client.get(f"/sessions/{session_id}", headers={"X-User-ID": "user-a"})
-    settings = client.get("/settings", headers={"X-User-ID": "user-a"})
+    home = client.get("/")
+    chat = client.get(f"/sessions/{session_id}")
+    settings = client.get("/settings")
 
     assert home.status_code == 200
     assert "工作计划" in home.text
@@ -75,7 +101,7 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
 def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     client = make_client(tmp_path, ())
 
-    settings = client.get("/settings", headers={"X-User-ID": "user-a"})
+    settings = client.get("/settings")
     script = client.get("/static/site.js")
 
     assert settings.status_code == 200
@@ -88,6 +114,47 @@ def test_browser_key_settings_and_static_script_are_available(tmp_path) -> None:
     assert "X-DeepSeek-API-Key" in script.text
     assert "submitChatWithBrowserKey" in script.text
     assert '"HX-Request": "true"' in script.text
+
+
+def test_register_login_logout_and_cookie_protect_private_pages(tmp_path) -> None:
+    client = TestClient(create_app(make_settings(tmp_path), provider=ScriptedLLMProvider(())))
+
+    anonymous_home = client.get("/", follow_redirects=False)
+    invalid_register = client.post(
+        "/register",
+        data={"username": "ab", "password": "password-123"},
+    )
+    registered = client.post(
+        "/register",
+        data={"username": "safe-user", "password": "password-123"},
+        follow_redirects=False,
+    )
+    logged_out = client.post("/logout", follow_redirects=False)
+    invalid_login = client.post(
+        "/login",
+        data={"username": "safe-user", "password": "wrong-password"},
+    )
+    logged_in = client.post(
+        "/login",
+        data={"username": "safe-user", "password": "password-123"},
+        follow_redirects=False,
+    )
+    home = client.get("/")
+
+    assert anonymous_home.status_code == 303
+    assert anonymous_home.headers["location"] == "/login"
+    assert invalid_register.status_code == 422
+    assert "用户名只能使用" in invalid_register.text
+    assert registered.status_code == 303
+    assert "HttpOnly" in registered.headers["set-cookie"]
+    assert "SameSite=lax" in registered.headers["set-cookie"]
+    assert "password-123" not in registered.text
+    assert logged_out.status_code == 303
+    assert invalid_login.status_code == 401
+    assert "用户名或密码错误。" in invalid_login.text
+    assert logged_in.status_code == 303
+    assert home.status_code == 200
+    assert "safe-user" in home.text
 
 
 def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_path) -> None:
@@ -106,20 +173,17 @@ def test_browser_key_header_uses_ephemeral_provider_without_persisting_key(tmp_p
             browser_key_provider_factory=create_browser_provider,
         )
     )
+    register_user(client, "user-a")
     session_id = create_session(client, "浏览器密钥窗口")
 
     response = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "使用浏览器密钥回答。"},
-        headers={
-            "X-User-ID": "user-a",
-            "HX-Request": "true",
-            "X-DeepSeek-API-Key": browser_key,
-        },
+        headers={"HX-Request": "true", "X-DeepSeek-API-Key": browser_key},
     )
 
     stored_messages = client.app.state.services.message_repository.list_for_session(
-        user_id="user-a",
+        user_id=current_user_id(client),
         session_id=session_id,
     )
     trace_content = (tmp_path / "agent-trace.jsonl").read_text(encoding="utf-8")
@@ -140,11 +204,7 @@ def test_invalid_browser_key_header_is_rejected_without_leaking_value(tmp_path) 
     response = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "你好"},
-        headers={
-            "X-User-ID": "user-a",
-            "HX-Request": "true",
-            "X-DeepSeek-API-Key": invalid_key,
-        },
+        headers={"HX-Request": "true", "X-DeepSeek-API-Key": invalid_key},
     )
 
     assert response.status_code == 422
@@ -167,7 +227,7 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     response = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "请计算 2 + 3。"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
     assert response.status_code == 200
@@ -186,19 +246,19 @@ def test_todo_htmx_add_and_complete_are_scoped_to_session(tmp_path) -> None:
     added = client.post(
         f"/sessions/{session_id}/todos",
         data={"title": "整理测试结果"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
     todos = client.get(
         f"/sessions/{session_id}/todos",
-        headers={"X-User-ID": "user-a"},
+        headers={},
     )
     todo_id = client.app.state.services.todo_repository.list_for_session(
-        user_id="user-a",
+        user_id=current_user_id(client),
         session_id=session_id,
     )[0].todo_id
     completed = client.post(
         f"/sessions/{session_id}/todos/{todo_id}/complete",
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
     assert added.status_code == 200
@@ -211,17 +271,15 @@ def test_todo_htmx_add_and_complete_are_scoped_to_session(tmp_path) -> None:
 
 def test_cross_user_session_routes_return_not_found(tmp_path) -> None:
     client = make_client(tmp_path, ())
-    session_id = create_session(client, "私有窗口", user_id="user-a")
+    other_client = second_user_client(client)
+    session_id = create_session(client, "私有窗口")
 
-    page = client.get(f"/sessions/{session_id}", headers={"X-User-ID": "user-b"})
-    todo = client.get(
-        f"/sessions/{session_id}/todos",
-        headers={"X-User-ID": "user-b"},
-    )
-    message = client.post(
+    page = other_client.get(f"/sessions/{session_id}")
+    todo = other_client.get(f"/sessions/{session_id}/todos")
+    message = other_client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "越权消息"},
-        headers={"X-User-ID": "user-b", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
     assert page.status_code == 404
@@ -232,48 +290,50 @@ def test_cross_user_session_routes_return_not_found(tmp_path) -> None:
 
 def test_delete_session_removes_related_data_and_rejects_cross_user(tmp_path) -> None:
     client = make_client(tmp_path, (FinalAnswer("已保存。"),))
+    other_client = second_user_client(client)
     session_id = create_session(client, "待删除会话")
     client.post(
         f"/sessions/{session_id}/todos",
         data={"title": "会话内待办"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
     client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "会话内消息"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
-    denied = client.post(
+    denied = other_client.post(
         f"/sessions/{session_id}/delete",
-        headers={"X-User-ID": "user-b"},
     )
     deleted = client.post(
         f"/sessions/{session_id}/delete",
-        headers={"X-User-ID": "user-a"},
         follow_redirects=False,
     )
-    home = client.get("/", headers={"X-User-ID": "user-a"})
-    removed = client.get(f"/sessions/{session_id}", headers={"X-User-ID": "user-a"})
+    home = client.get("/")
+    removed = client.get(f"/sessions/{session_id}")
 
     assert denied.status_code == 404
     assert deleted.status_code == 303
     assert deleted.headers["location"] == "/"
     assert "待删除会话" not in home.text
     assert removed.status_code == 404
-    assert client.app.state.services.session_repository.list_for_user(user_id="user-a") == ()
+    assert client.app.state.services.session_repository.list_for_user(
+        user_id=current_user_id(client)
+    ) == ()
 
 
 def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> None:
     client = TestClient(
         create_app(replace(make_settings(tmp_path), openai_api_key=None))
     )
+    register_user(client, "user-a")
     session_id = create_session(client, "未配置模型")
 
     response = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "你好"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
     assert response.status_code == 200
@@ -284,22 +344,22 @@ def test_missing_api_key_returns_safe_chat_error_without_network(tmp_path) -> No
 def test_message_validation_does_not_consume_provider_and_normal_form_redirects(tmp_path) -> None:
     provider = ScriptedLLMProvider((FinalAnswer("已保存消息。"),))
     client = TestClient(create_app(make_settings(tmp_path), provider=provider))
+    register_user(client, "user-a")
     session_id = create_session(client, "普通表单")
 
     invalid = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "   "},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
     submitted = client.post(
         f"/sessions/{session_id}/messages",
         data={"content": "请保存这条消息。"},
-        headers={"X-User-ID": "user-a"},
         follow_redirects=False,
     )
     page = client.get(
         f"/sessions/{session_id}",
-        headers={"X-User-ID": "user-a"},
+        headers={},
     )
 
     assert invalid.status_code == 422
@@ -318,28 +378,25 @@ def test_web_rejects_invalid_identity_session_and_cross_session_todo(tmp_path) -
     client.post(
         f"/sessions/{first_session_id}/todos",
         data={"title": "仅属于第一个窗口"},
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
     todo_id = client.app.state.services.todo_repository.list_for_session(
-        user_id="user-a",
+        user_id=current_user_id(client),
         session_id=first_session_id,
     )[0].todo_id
 
-    invalid_identity = client.get("/", headers={"X-User-ID": "invalid user id"})
-    invalid_session = client.get(
-        "/sessions/not-a-uuid",
-        headers={"X-User-ID": "user-a"},
-    )
+    ignored_identity_header = client.get("/", headers={"X-User-ID": "invalid user id"})
+    invalid_session = client.get("/sessions/not-a-uuid")
     cross_session_todo = client.post(
         f"/sessions/{second_session_id}/todos/{todo_id}/complete",
-        headers={"X-User-ID": "user-a", "HX-Request": "true"},
+        headers={"HX-Request": "true"},
     )
 
-    assert invalid_identity.status_code == 400
+    assert ignored_identity_header.status_code == 200
     assert invalid_session.status_code == 404
     assert cross_session_todo.status_code == 404
     remaining = client.app.state.services.todo_repository.list_for_session(
-        user_id="user-a",
+        user_id=current_user_id(client),
         session_id=first_session_id,
     )
     assert remaining[0].status.value == "open"

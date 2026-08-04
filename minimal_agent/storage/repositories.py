@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from typing import Iterable
 from uuid import uuid4
 
+from ..auth import hash_session_token
 from ..errors import DomainValidationError, ResourceNotFoundError
 from ..models import Message, MessageRole, Session, ToolResult, ToolResultStatus
 from .database import SQLiteDatabase
-from .entities import SessionSummary, TodoItem, TodoStatus
+from .entities import SessionSummary, TodoItem, TodoStatus, User
 
 
 def _utc_now() -> datetime:
@@ -57,6 +58,134 @@ class _OwnershipRepository:
         if row is None:
             raise ResourceNotFoundError("会话不存在或无权访问。")
         return row
+
+
+class UserRepository(_OwnershipRepository):
+    """保存注册用户与密码哈希，Web 层永不取得原始密码。"""
+
+    def create(self, *, username: str, password_hash: str) -> User:
+        """创建用户名唯一的本地用户。"""
+
+        _require_text(username, name="username")
+        _require_text(password_hash, name="password_hash")
+        user_id = str(uuid4())
+        created_at = _utc_now()
+        with self._database.connection() as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO users (id, display_name, username, password_hash, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (user_id, username, username, password_hash, _timestamp(created_at)),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise DomainValidationError("用户名已被使用") from exc
+        return User(user_id=user_id, username=username, created_at=created_at)
+
+    def get_authentication(self, *, username: str) -> tuple[User, str] | None:
+        """读取认证所需的用户和密码哈希，仅供登录校验使用。"""
+
+        _require_text(username, name="username")
+        with self._database.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id, username, password_hash, created_at
+                FROM users
+                WHERE username = ? AND password_hash IS NOT NULL
+                """,
+                (username,),
+            ).fetchone()
+        if row is None:
+            return None
+        return (
+            User(
+                user_id=row["id"],
+                username=row["username"],
+                created_at=_parse_timestamp(row["created_at"]),
+            ),
+            row["password_hash"],
+        )
+
+    def get(self, *, user_id: str) -> User | None:
+        """读取已注册用户的安全展示信息。"""
+
+        _require_text(user_id, name="user_id")
+        with self._database.connection() as connection:
+            row = connection.execute(
+                """
+                SELECT id, username, created_at
+                FROM users
+                WHERE id = ? AND username IS NOT NULL AND password_hash IS NOT NULL
+                """,
+                (user_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return User(
+            user_id=row["id"],
+            username=row["username"],
+            created_at=_parse_timestamp(row["created_at"]),
+        )
+
+
+class AuthSessionRepository(_OwnershipRepository):
+    """保存可撤销的服务端登录会话，不在数据库保存原始 Token。"""
+
+    def create(self, *, user_id: str, token: str, expires_at: datetime) -> None:
+        """创建登录会话，仅保存 Token 的 SHA-256 摘要。"""
+
+        _require_text(user_id, name="user_id")
+        if expires_at.tzinfo is None or expires_at.utcoffset() is None:
+            raise DomainValidationError("expires_at 必须包含时区信息")
+        with self._database.connection() as connection:
+            if connection.execute(
+                "SELECT 1 FROM users WHERE id = ?", (user_id,)
+            ).fetchone() is None:
+                raise ResourceNotFoundError("用户不存在。")
+            connection.execute(
+                """
+                INSERT INTO auth_sessions (token_hash, user_id, expires_at, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    hash_session_token(token),
+                    user_id,
+                    _timestamp(expires_at),
+                    _timestamp(_utc_now()),
+                ),
+            )
+
+    def get_user_id(self, *, token: str) -> str | None:
+        """验证会话 Token，清理过期记录并返回所属用户 ID。"""
+
+        if not isinstance(token, str) or not token.strip():
+            return None
+        now = _utc_now()
+        with self._database.connection() as connection:
+            connection.execute(
+                "DELETE FROM auth_sessions WHERE expires_at <= ?",
+                (_timestamp(now),),
+            )
+            row = connection.execute(
+                """
+                SELECT user_id FROM auth_sessions
+                WHERE token_hash = ? AND expires_at > ?
+                """,
+                (hash_session_token(token), _timestamp(now)),
+            ).fetchone()
+        return row["user_id"] if row is not None else None
+
+    def delete(self, *, token: str) -> None:
+        """撤销指定浏览器的登录会话，未知 Token 保持幂等。"""
+
+        if not isinstance(token, str) or not token.strip():
+            return
+        with self._database.connection() as connection:
+            connection.execute(
+                "DELETE FROM auth_sessions WHERE token_hash = ?",
+                (hash_session_token(token),),
+            )
 
 
 class SessionRepository(_OwnershipRepository):

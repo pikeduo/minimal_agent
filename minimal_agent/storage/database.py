@@ -28,8 +28,21 @@ class SQLiteDatabase:
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     display_name TEXT NOT NULL DEFAULT '',
+                    username TEXT UNIQUE,
+                    password_hash TEXT,
                     created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS auth_sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_expiry
+                    ON auth_sessions(user_id, expires_at);
 
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
@@ -104,6 +117,26 @@ class SQLiteDatabase:
                     ON todos(user_id, session_id, status, created_at);
                 """
             )
+            self._migrate_user_auth_columns(connection)
+
+    @staticmethod
+    def _migrate_user_auth_columns(connection: sqlite3.Connection) -> None:
+        """为已有本地数据库补齐认证字段，不删除历史用户或会话。"""
+
+        column_names = {
+            row["name"] for row in connection.execute("PRAGMA table_info(users)")
+        }
+        if "username" not in column_names:
+            connection.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        if "password_hash" not in column_names:
+            connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username
+            ON users(username)
+            WHERE username IS NOT NULL
+            """
+        )
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:

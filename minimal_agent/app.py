@@ -15,6 +15,7 @@ from .models import ProviderError, ProviderErrorKind
 from .providers import DeepSeekProvider, LLMProvider, LLMRequest
 from .runtime import AgentRuntime
 from .storage import (
+    AuthSessionRepository,
     MessageRepository,
     SessionRepository,
     SessionSummaryRepository,
@@ -22,6 +23,7 @@ from .storage import (
     SQLiteTodoService,
     TodoRepository,
     ToolResultRepository,
+    UserRepository,
 )
 from .tools import CalculatorTool, SearchTool, TodoTool, ToolRegistry, WeatherTool
 from .tracing import JsonlTraceRecorder
@@ -107,6 +109,8 @@ def _build_services(
     database = SQLiteDatabase(settings.database_path)
     database.initialize()
     sessions = SessionRepository(database)
+    users = UserRepository(database)
+    auth_sessions = AuthSessionRepository(database)
     messages = MessageRepository(database)
     summaries = SessionSummaryRepository(database)
     tool_results = ToolResultRepository(database)
@@ -147,6 +151,8 @@ def _build_services(
     )
     return WebServices(
         conversation_service=conversation_service,
+        user_repository=users,
+        auth_session_repository=auth_sessions,
         session_repository=sessions,
         message_repository=messages,
         todo_repository=todos,

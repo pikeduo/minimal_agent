@@ -13,6 +13,8 @@ def make_client(tmp_path) -> TestClient:
             "DATABASE_PATH": str(tmp_path / "app.sqlite3"),
             "TRACE_PATH": str(tmp_path / "agent-trace.jsonl"),
             "SERVER_LOG_PATH": str(tmp_path / "server.log"),
+            "AUTH_SESSION_DAYS": "7",
+            "AUTH_COOKIE_SECURE": "false",
             "MAX_AGENT_STEPS": "8",
             "MAX_CONTEXT_MESSAGES": "24",
             "CONTEXT_KEEP_RECENT": "12",
@@ -43,6 +45,8 @@ def test_settings_use_safe_defaults_when_api_key_is_missing() -> None:
     assert settings.openai_model == "deepseek-v4-flash"
     assert settings.deepseek_base_url == "https://api.deepseek.com"
     assert settings.server_log_path == "logs/server.log"
+    assert settings.auth_session_days == 7
+    assert settings.auth_cookie_secure is False
     assert settings.max_agent_steps == 8
     assert settings.max_context_messages == 24
     assert settings.context_keep_recent == 12

@@ -42,12 +42,13 @@ python -m uvicorn minimal_agent.app:create_app --factory --host 127.0.0.1 --port
 
 ## 使用说明
 
+- **账户**：首次打开会进入注册页；登录会话只保存在 HttpOnly Cookie，密码仅以 scrypt 哈希保存到本地 SQLite。
 - **会话**：每个会话都有独立 URL，可在多个浏览器标签页分别打开和继续对话；首页可在确认后删除会话及其关联数据。
 - **聊天**：消息通过 HTMX 局部更新；页面只显示用户消息、最终回答和简化工具状态。
 - **Todo**：可在当前会话中新增和完成待办，不会出现在其他会话。
 - **设置**：显示模型与运行限制；可选择将 DeepSeek Key 保存在当前浏览器缓存，页面不会回显密钥。
 
-当前身份机制仅用于本地开发：默认用户为 `demo-user`。服务端始终以 `user_id + session_id` 校验 Session 和 Todo 所有权；生产部署前应接入真实认证。
+服务端从登录会话取得用户身份，并以 `user_id + session_id` 校验 Session 和 Todo 所有权。`AUTH_COOKIE_SECURE=false` 仅适用于本地 HTTP 开发；生产 HTTPS 部署必须改为 `true`。
 
 ## 可用能力
 
