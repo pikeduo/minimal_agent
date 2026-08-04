@@ -35,6 +35,8 @@ def test_settings_use_safe_defaults_when_api_key_is_missing() -> None:
     settings = load_settings({})
 
     assert settings.openai_api_key is None
+    assert settings.openai_model == "deepseek-v4-flash"
+    assert settings.deepseek_base_url == "https://api.deepseek.com"
     assert settings.max_agent_steps == 8
     assert settings.max_context_messages == 24
     assert settings.context_keep_recent == 12

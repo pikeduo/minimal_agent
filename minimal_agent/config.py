@@ -18,6 +18,7 @@ class Settings:
 
     openai_api_key: str | None
     openai_model: str
+    deepseek_base_url: str
     database_path: str
     trace_path: str
     max_agent_steps: int
@@ -60,7 +61,10 @@ def load_settings(environment: Mapping[str, str] | None = None) -> Settings:
     api_key = environment.get("OPENAI_API_KEY") or None
     return Settings(
         openai_api_key=api_key,
-        openai_model=environment.get("OPENAI_MODEL", "deepseek-chat"),
+        openai_model=environment.get("OPENAI_MODEL", "deepseek-v4-flash"),
+        deepseek_base_url=environment.get(
+            "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+        ),
         database_path=environment.get("DATABASE_PATH", "data/minimal_agent.sqlite3"),
         trace_path=environment.get("TRACE_PATH", "logs/agent-trace.jsonl"),
         max_agent_steps=_positive_int(

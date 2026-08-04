@@ -40,6 +40,7 @@ class LLMRequest:
     messages: tuple[Message, ...]
     tool_schemas: tuple[Mapping[str, Any], ...] = ()
     tool_results: tuple[ToolResult, ...] = ()
+    tool_call_batches: tuple[ToolCallBatch, ...] = ()
     session_summary: str | None = None
 
     def __post_init__(self) -> None:
@@ -55,6 +56,10 @@ class LLMRequest:
         object.__setattr__(self, "tool_schemas", copied_schemas)
         if not all(isinstance(result, ToolResult) for result in self.tool_results):
             raise DomainValidationError("tool_results 只能包含 ToolResult")
+        if not all(
+            isinstance(batch, ToolCallBatch) for batch in self.tool_call_batches
+        ):
+            raise DomainValidationError("tool_call_batches 只能包含 ToolCallBatch")
         if self.session_summary is not None and (
             not isinstance(self.session_summary, str) or not self.session_summary.strip()
         ):
@@ -68,6 +73,7 @@ class LLMRequest:
             "messages": [message.to_dict() for message in self.messages],
             "tool_schemas": [dict(schema) for schema in self.tool_schemas],
             "tool_results": [result.to_dict() for result in self.tool_results],
+            "tool_call_batches": [batch.to_dict() for batch in self.tool_call_batches],
             "session_summary": self.session_summary,
         }
 

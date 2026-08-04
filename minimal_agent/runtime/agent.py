@@ -92,6 +92,7 @@ class AgentRuntime:
             session_id=session_id,
         ).start()
         tool_results: list[ToolResult] = []
+        tool_call_batches: list[ToolCallBatch] = []
         tool_context = ToolExecutionContext(
             user_id=user_id,
             session_id=session_id,
@@ -105,6 +106,7 @@ class AgentRuntime:
                 messages=messages,
                 tool_schemas=self._tool_registry.export_schemas(),
                 tool_results=tuple((*historical_tool_results, *tool_results)),
+                tool_call_batches=tuple(tool_call_batches),
                 session_summary=session_summary,
             )
             response = self._complete_safely(request)
@@ -124,6 +126,7 @@ class AgentRuntime:
                     tool_results=tuple(tool_results),
                 )
             if isinstance(response, ToolCallBatch):
+                tool_call_batches.append(response)
                 for call in response.calls:
                     tool_results.append(self._tool_registry.execute(call, tool_context))
                 continue

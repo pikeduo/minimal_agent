@@ -28,6 +28,9 @@ minimal-agent = "minimal_agent.app:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "smoke: 需要显式启用并配置真实模型服务的冒烟测试",
+]
 
 [tool.setuptools.packages.find]
 include = ["minimal_agent*"]
