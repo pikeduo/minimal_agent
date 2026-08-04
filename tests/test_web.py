@@ -83,7 +83,7 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert home.status_code == 200
     assert "新会话" in home.text
     assert 'name="title"' not in home.text
-    assert 'href="/static/site.css?v=20260804-2"' in home.text
+    assert 'href="/static/site.css?v=20260804-3"' in home.text
     assert f"/sessions/{session_id}" in home.text
     assert f"/sessions/{session_id}/delete" in home.text
     assert "确定删除此会话" in home.text
@@ -292,6 +292,7 @@ def test_htmx_message_submission_renders_final_answer_and_safe_tool_status(tmp_p
     assert "复制 Markdown" in response.text
     assert "**5**" in response.text
     assert "已完成工具调用：calculator" in response.text
+    assert "已完成工具调用：<code>calculator</code>" in response.text
     assert 'hx-swap-oob="true"' in response.text
     assert "2 + 3&quot;" not in response.text
 

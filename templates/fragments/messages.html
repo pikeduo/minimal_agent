@@ -12,12 +12,7 @@
         >复制 Markdown</button>
         {% set message_tool_results = tool_results_by_run.get(message.run_id, ()) if message.run_id else () %}
         {% if message_tool_results %}
-          <p class="message-tool-status">
-            已完成工具调用：
-            {% for tool_result in message_tool_results %}
-              <code>{{ tool_result.tool_name }}</code>{% if tool_result.status.value == 'error' %}（失败）{% endif %}{% if not loop.last %}、{% endif %}
-            {% endfor %}
-          </p>
+          <p class="message-tool-status">已完成工具调用：{% for tool_result in message_tool_results %}<code>{{ tool_result.tool_name }}</code>{% if tool_result.status.value == 'error' %}（失败）{% endif %}{% if not loop.last %}、{% endif %}{% endfor %}</p>
         {% endif %}
       {% else %}
         <p>{{ message.content }}</p>

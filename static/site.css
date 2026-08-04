@@ -133,7 +133,7 @@ textarea:focus, input:focus { border-color: #7581ed; background: #fff; outline: 
 .markdown-content pre code { padding: 0; background: transparent; color: inherit; }
 .copy-markdown-button { margin-top: .7rem; padding: .32rem .52rem; color: #59627a; background: #edf0f7; box-shadow: none; font-size: .76rem; }
 .copy-markdown-button:hover { color: #303ab6; background: #e3e7f3; box-shadow: none; }
-.message-tool-status { margin: .7rem 0 0; color: #52607d; font-size: .82rem; }
+.message-tool-status { margin: .45rem 0 0; color: #52607d; font-size: .82rem; line-height: 1.35; white-space: normal; }
 .message-tool-status code { padding: .12rem .32rem; border-radius: .3rem; background: #edf0f7; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .message-user { margin-left: 9%; background: linear-gradient(135deg, #e2e9ff, #d8f0ff); }
 .message-assistant { margin-right: 9%; border: 1px solid #e3e7f1; background: #fff; }
