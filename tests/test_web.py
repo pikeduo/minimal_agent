@@ -58,6 +58,7 @@ def test_session_pages_and_settings_hide_api_key(tmp_path) -> None:
     assert home.status_code == 200
     assert "工作计划" in home.text
     assert "第二个窗口" in home.text
+    assert 'href="/static/site.css?v=20260804-2"' in home.text
     assert f"/sessions/{session_id}" in home.text
     assert f"/sessions/{session_id}/delete" in home.text
     assert "确定删除此会话" in home.text
