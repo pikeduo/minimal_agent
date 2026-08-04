@@ -137,6 +137,7 @@ def test_deepseek_provider_includes_greeting_and_capability_instruction() -> Non
     assert system_message == {"role": "system", "content": SYSTEM_INSTRUCTION}
     assert "简短问候" in SYSTEM_INSTRUCTION
     assert "计算、搜索、天气查询和待办管理" in SYSTEM_INSTRUCTION
+    assert "必须调用 calculator 工具" in SYSTEM_INSTRUCTION
 
 
 def test_deepseek_provider_includes_current_todo_snapshot_in_context() -> None:
