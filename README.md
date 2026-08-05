@@ -2,6 +2,8 @@
 
 Minimal Agent 是一个轻量的 Web Agent：它可以维护多个会话、调用受控工具、保存 Todo，并在本地保留脱敏的运行记录。核心 Runtime、工具调度、Session、Context 和 Trace 都在本项目内实现。
 
+项目链接：[https://github.com/pikeduo/minimal_agent](https://github.com/pikeduo/minimal_agent)
+
 ## 快速开始
 
 ### 1. 创建 Conda 环境
