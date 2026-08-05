@@ -61,6 +61,61 @@ python -m uvicorn minimal_agent.app:create_app --factory --host 127.0.0.1 --port
 | Context | 使用当前会话摘要、近期消息与相关工具结果支持追问。 |
 | Trace | 以 JSONL 记录运行事件，并自动清除敏感字段。 |
 
+## 系统设计
+
+项目不依赖 LangGraph、OpenHands、OpenClaw 等 Agent 框架；Agent Loop、工具调度、会话、Context、压缩和 Trace 都由本仓库实现。Web 前端没有独立的构建服务：FastAPI 直接提供 Jinja2 模板、HTMX 片段和少量原生 JavaScript，因此启动后端命令即会同时提供页面。
+
+```text
+浏览器（Jinja2 + HTMX）
+        │  登录身份、会话 ID、当前消息、临时浏览器 Key
+        ▼
+FastAPI 路由层
+        │  校验 user_id + session_id，加载/保存会话数据
+        ▼
+ContextBuilder ──► SQLite（消息、会话摘要、工具结果、Todo）
+        │
+        ▼
+AgentRuntime（最大步骤的 Provider → 工具 → Provider 循环）
+   ├── DeepSeekProvider（真实 OpenAI-compatible API）
+   ├── ScriptedLLMProvider（离线测试替身）
+   └── ToolRegistry（calculator、search、weather、todo）
+        │
+        ├── SQLite：持久化最终回答、必要工具结果与 Todo
+        └── JSONL Trace：记录脱敏生命周期事件
+```
+
+一次对话的主循环如下：
+
+1. 接收用户输入，并以 `user_id + session_id` 验证当前会话归属。
+2. 构建当前会话的 Context，将工具 Schema 一并交给 Provider。
+3. Provider 返回最终回答，或返回结构化 `ToolCall`；Runtime 只按结构化调用调度工具，不按用户关键词硬编码选择工具。
+4. 若调用工具，Runtime 先校验参数 Schema、执行工具并保存必要结果，再把结果送回 Provider；直到得到最终回答、达到最大步骤或出现安全错误。
+
+## Memory 与 Context 管理
+
+### 召回时机
+
+每次发送消息、每次调用 LLM 前，`ContextBuilder` 都只从**当前登录用户的当前 Session** 读取数据。这样用户在窗口 1 查询天气并记录待办、在窗口 2 撰写周报并记录待办时，两份上下文不会混合；其他用户和其他会话的数据不会进入本轮请求。
+
+### 放置方式
+
+构造给 Provider 的请求按以下职责组织，而不是把整个数据库或 Trace 原样传入：
+
+| Context 部分 | 内容 | 用途 |
+| --- | --- | --- |
+| 系统提示与工具 Schema | 行为边界、可用工具的名称、描述和参数 Schema | 让 LLM 在约束内自主决定是否调用工具。 |
+| 会话摘要 | 已被压缩的较早消息的确定性摘要 | 保留已确认事实、目标、关键结果和未完成事项。 |
+| 近期消息 | 当前 Session 最近的用户消息、助手最终回答和必要工具消息 | 支持普通追问与延续性对话。 |
+| 历史工具结果 | 当前 Session 最近的相关结构化结果 | 支持“刚才的天气如何”“把刚才的待办完成”等工具型追问。 |
+| 当前 Todo 快照 | 当前 Session 下的待办标题、状态和完成时间 | 让模型知道待办已完成或仍待处理。 |
+| 本轮工具交互 | 本次 Agent Loop 新产生的 ToolCall 与 ToolResult | 让模型根据工具结果决定继续调用或生成最终回答。 |
+
+不会放入 Context 的内容包括：API Key、Authorization Header、完整 Provider 原始响应、Traceback、完整隐式思维链、其他用户或其他 Session 的数据。
+
+### 压缩与限制
+
+当当前 Session 的消息数超过 `MAX_CONTEXT_MESSAGES` 时，系统保留最近 `CONTEXT_KEEP_RECENT` 条消息原文，并将更早且尚未覆盖的消息追加到确定性摘要。摘要记录最后覆盖的消息 ID，避免下一轮重复压缩；原始消息仍保留在 SQLite，不会删除。`MAX_AGENT_STEPS` 则限制一次 Agent Loop 中“模型—工具”的最大往返次数，防止异常循环无限执行。
+
 ## 测试
 
 普通测试完全离线：
